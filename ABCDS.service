@@ -1,0 +1,13 @@
+[Unit]
+Description=Automatic Battery Charger Discharger Script 
+After=syslog.target network.target
+
+[Service]
+WorkingDirectory=/home/pi/ABCDs/
+ExecStart=/home/pi/ABCDs/BatteryScript.py
+
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
