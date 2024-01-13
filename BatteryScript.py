@@ -582,7 +582,7 @@ def StartStopOperationDisCharger(val,force=0):
             mylogs.info("StartStopOperationDisCharger: SOC too low: " + str(status.BMSSOC) + "% ->  SET VALUE TO: " + str(val))
 
         if(status.DisChargerStatus == 0) and (val == 0): 
-            mylogs.info("StartStopOperationDisCharger: Already off mode")
+            mylogs.debug("StartStopOperationDisCharger: Already off mode")
             return #DisCharger already off, can stop here
         
 

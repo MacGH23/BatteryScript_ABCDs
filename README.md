@@ -132,6 +132,7 @@ To connect to Tmux:<br/>
 
 **Credits:<br/>**
 Thanks to:<br/>
+https://github.com/stcan/meanwell-can-control for first idea for this script<br/>
 https://github.com/reserve85/HoymilesZeroExport where I take the code for the http meter request<br/>
 https://github.com/fah/jk-bms for the jkbms script
 
