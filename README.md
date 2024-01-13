@@ -106,6 +106,7 @@ Install python3 smbus lib:<br/>
 
 **Installation:<br/>**
 Some python lib needed. Please install:<br/>
+`pip3 install pyserial`<br/>
 `pip3 install paho-mqtt`<br/>
 `pip3 install ifcfg`<br/>
 `pip3 install minimalmodbus`<br/>
@@ -130,5 +131,7 @@ To connect to Tmux:<br/>
 `./ShowBS.sh`<br/>
 
 **Credits:<br/>**
-Thanks to https://github.com/reserve85/HoymilesZeroExport where I take the code for the http meter request
+Thanks to:<br/>
+https://github.com/reserve85/HoymilesZeroExport where I take the code for the http meter request<br/>
+https://github.com/fah/jk-bms for the jkbms script
 
