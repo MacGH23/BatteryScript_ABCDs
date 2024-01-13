@@ -57,7 +57,7 @@ Only the CAN wires are needed to install. See manual of the device where the CAN
 
 Lumentree devices uses a normal RS232 interface with modbus protocol.<br/>Easiest methode to connect is a simple USB to RS232 adapter.
 
-JKBMS is optional. You have to use the original JK RS485 adapter and connet it to a RS485 interface at the Raspberry. <br/>
+JKBMS is optional. You have to use the original JK RS485 adapter and connect it to a RS485 interface at the Raspberry. <br/>
 Use the Waveshare CAN/RS485 HAT. Especially if you also use a CAN device.
 
 MQTT publish:<br/>
@@ -67,7 +67,7 @@ Change the already implemented ones in the charger.conf, or add a new in the scr
 * mqttpublishSOC  = SOC status of BMS 0..100 (if used)
 
 Usage:<br/>
-All settings can be configured in charger.conf<br/>
+All settings can be configured in BSsetup.conf<br/>
 All the options are explained or self explaining in detail in the conf file. <br/>
 
 Change to executeable by chmod 755 BatteryScript.py<br/>
