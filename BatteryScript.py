@@ -135,6 +135,7 @@ class chargerconfig:
         self.StopDischargeVoltage      =  self.CellCount * self.CellvoltageMin
         self.RestartChargevoltage      =  self.CellCount * self.CellvoltageMaxRestart
         self.RestartDisChargevoltage   =  self.CellCount * self.CellvoltageMinRestart
+        self.RestartDisChargevoltage   =  self.CellCount * self.CellvoltageMinRestart
 
         self.MaxChargeCurrent          =  int(updater["Setup"]["MaxChargeCurrent"].value)
         self.MinChargeCurrent          =  int(updater["Setup"]["MinChargeCurrent"].value)
@@ -153,6 +154,8 @@ class chargerconfig:
         self.MeterUpdateCounter        =  int(updater["Setup"]["MeterUpdateCounter"].value)
         self.MW_EEPROM_COUNTER         =  int(updater["Setup"]["MW_EEPROM_COUNTER"].value)
         self.BatteryVoltageSource      =  int(updater["Setup"]["BatteryVoltageSource"].value)
+        self.BatteryVoltageCorrection  =  int(updater["Setup"]["BatteryVoltageCorrection"].value)
+
 
         self.LastDisChargePower_delta  =  int(updater["Setup"]["LastDisChargePower_delta"].value)
         self.Voltage_ACIN_correction   =  int(updater["Setup"]["Voltage_ACIN_correction"].value)
@@ -297,6 +300,9 @@ class chargerconfig:
 
         mylogs.info("StopDischargeVoltage:       " + str(self.StopDischargeVoltage))
         mylogs.info("RestartDisChargevoltage:    " + str(self.RestartDisChargevoltage))
+
+        mylogs.info("BatteryVoltageSource:       " + str(self.BatteryVoltageSource))
+        mylogs.info("BatteryVoltageCorrection:   " + str(self.BatteryVoltageCorrection))
         
         mylogs.info("Read config done ...")
         return    
@@ -975,6 +981,9 @@ def GetBatteryVoltage():
         if(cfg.BatteryVoltageSource == 3):
             GetDisChargerVoltage()
             status.BatteryVoltage = status.DisChargerVoltage
+
+        #add the voltage correction to the value + or -
+        status.BatteryVoltage = status.BatteryVoltage + cfg.BatteryVoltageCorrection
 
     except:
         mylogs.error("GetBatteryVoltage EXEPTION !")
