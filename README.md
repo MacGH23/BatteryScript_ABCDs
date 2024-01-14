@@ -11,9 +11,9 @@ Should work on any Raspberry Pi. <br/>
 
 **Current supported hardware:<br/>**
 **Charger:**
-* Meanwell NPB-[450/750/1200/1700]-[12/24/48/96]
+* Meanwell NPB-[450/750/1200/1700]-[12/24/48/96]<br/>
 * Meanwell BIC-2200<br/>
-* Simulator, can be used for testing
+* Simulator, can be used for testing<br/>
 
 *Important Note for Meanwell devices !<br/>*
 Changing the output values are limited to 4.000.000 by design.<br/>

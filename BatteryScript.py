@@ -67,6 +67,7 @@ class Devicestatus:
         self.LastChargerMode            = 0
         self.ChargerStatus              = 0
         self.DisChargerStatus           = 0
+        self.ChargerMainVoltage         = 0 #must be set during init of the charger to 12V, 24V, 48V or 92V
         self.ZeroExportWatt             = 0
         self.ZeroImportWatt             = 0
         self.BatteryFULL                = 0   #0=no, 1=Full
@@ -363,6 +364,29 @@ def on_exit():
 def handle_exit(signum, frame):
     mylogs.info("SIGNAL TO STOP RECEIVED")
     sys.exit(0)
+
+
+def CheckPatameter():
+    if((cfg.CellvoltageMax > 365) or (cfg.CellvoltageMin < 250)):
+        mylogs.error("\n\nCELL VOLTAGE TOO HIGH OR TOO LOW! Voltage: "+ str(cfg.CellvoltageMin) + " - " + cfg.CellvoltageMax + "\n")
+        return 0
+        
+    if((status.ChargerMainVoltage / cfg.CellCount) != 300):
+        mylogs.error("\n\nCHARGER DOES NOT FIT FOR YOUR BATTERY, TOO LOW/HIGH VOLTAGE !")
+        mylogs.error("Charger Main Voltage: " + str(status.ChargerMainVoltage) + " - CellCount: " + str(cfg.CellCount))
+        return 0
+
+    if(cfg.MW_EEPROM_COUNTER > 4000000):
+        mylogs.error("\n\nMEANWELL DEVICE EEPROM MAX WRITE REACHED! " + " - Counter: " + str(cfg.MW_EEPROM_COUNTER)+"\n")
+        return 0
+        
+    if(cfg.BatteryVoltageSource == 0):
+        mylogs.error("\n\nNO VOLTAGE SOURCE DEFINED!\n")
+        return 0
+
+    #looks good continue
+    mylogs.info("Parameter check OK")
+    return 1
 
 
 #####################################################################
@@ -1205,11 +1229,6 @@ if (cfg.i_changed_my_config == 0):
     sys.exit()
 
 
-if((cfg.CellvoltageMax > 365) or (cfg.CellvoltageMin < 250)):
-    print("CELL SET VOLTAGE TOO HIGH OR TOO LOW")
-    mylogs.error("\n\nCELL VOLTAGE TOO HIGH OR TOO LOW!\n")
-    sys.exit()
-
 #################################################################
 #init average power calculation array
 powervalarray = []
@@ -1255,6 +1274,9 @@ if (cfg.Selected_Device_Charger <=1):
     
     #print(candev.serial_read())
     mylogs.info(mwt + " temperature: " + str(candev.temp_read()/10) + " C")
+    
+    #Set ChargerMainVoltage of the charger to check the parameters, needs to be in value *100, 24 = 2400
+    status.ChargerMainVoltage = candev.dev_Voltage * 100
     
     #get grid voltage from meanwell device
     Voltage_IN = 0
@@ -1477,6 +1499,14 @@ if (cfg.GetPowerOption==255):
     schedule.every(2).seconds.do(simulator_request)                      # Start every 2s
     mylogs.debug("USE SIMULATOR for Meter")
 
+
+#################################################################
+#################################################################
+# Finally check the Paramter if they look good
+if(CheckPatameter() == 0):
+    print("Someting wrong with yout paramaters - Check all settings")
+    mylogs.error("\n\nSometing wrong with yout paramaters - Check all settings!\n")
+    sys.exit()
 
 #################################################################
 #################################################################
