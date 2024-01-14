@@ -46,9 +46,9 @@ Additional hardware needed, depending on the used hardware
 
 Device / HW | Interface | Recommended
 ---|---|---|
-Meanwell | CAN | [RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) or [Fischl USBTin](https://www.fischl.de/usbtin/)<br/> ![JKBms RS485](/pictures/jkbms_rs485.JPG "JKBms RS485")   ![Fischl USBTin](/pictures/usbtin.jpg "Fischl USBTin")
+Meanwell | CAN | [RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) or [Fischl USBTin](https://www.fischl.de/usbtin/)<br/> ![Waveshare RS485CAN](/pictures/wavesharers485can.jpg "Waveshare RS485CAN")   ![Fischl USBTin](/pictures/usbtin.jpg "Fischl USBTin")
 Lumentree | RS232 | Any simple USB to RS232 adapter<br/> ![USB RS232](/pictures/usbrs232.jpg "USB RS232")
-JKBMS | RS485 | [RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) with original JKRS485 adapter
+JKBMS | RS485 | [RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) with original JKRS485 adapter<br/> ![JKBms RS485](/pictures/jkbms_rs485.JPG "JKBms RS485")
 
 
 Meanwell devices using a small 2x7 pin connector from MPE for the CAN interface.<br/> Normally a connector with 2 wires are part of the delievery. The connector is a [MPE BLC 14](https://www.reichelt.de/crimp-buchsenleiste-14-pol-mpe-blc-14-p247189.html?CCOUNTRY=445&LANGUAGE=de&nbc=1&&r=1) (partnumber 906-2-014-X-BS0A10) and [crimp pins](https://www.reichelt.de/crimpkontakt-fuer-mpe-blc-einzeln-mpe-cc222-p150922.html?CCOUNTRY=445&LANGUAGE=de&nbc=1&&r=1) (partnumber CC2-22/30-TT-RL)
