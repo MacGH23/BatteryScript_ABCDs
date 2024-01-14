@@ -46,7 +46,7 @@ Additional hardware needed, depending on the used hardware
 
 Device / HW | Interface | Recommended
 ---|---|---|
-Meanwell | CAN | [RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) or [Fischl USBTin](https://www.fischl.de/usbtin/)
+Meanwell | CAN | [RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) or [Fischl USBTin](https://www.fischl.de/usbtin/)!<br/>[JKBms RS485](pictures/jkbms_rs485.JPG "JKBms RS485") - [Fischl USBTin](pictures/usbtin.JPG "Fischl USBTin")
 Lumentree | RS232 | Any simple USB to RS232 adapter
 JKBMS | RS485 | [RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) with original JKRS485 adapter
 
@@ -55,7 +55,8 @@ Meanwell devices using a small 2x7 pin connector from MPE for the CAN interface.
 
 Only the CAN wires are needed to install. See manual of the device where the CAN PINs are.
 
-Lumentree devices uses a normal RS232 interface with modbus protocol.<br/>Easiest methode to connect is a simple USB to RS232 adapter.
+Lumentree devices uses a normal RS232 interface with modbus protocol.<br/>
+Easiest methode to connect is a simple USB to RS232 adapter.
 
 JKBMS is optional. You have to use the original JK RS485 adapter and connect it to a RS485 interface at the Raspberry. <br/>
 Use the Waveshare CAN/RS485 HAT. Especially if you also use a CAN device.
