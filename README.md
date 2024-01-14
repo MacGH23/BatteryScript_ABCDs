@@ -46,8 +46,8 @@ Additional hardware needed, depending on the used hardware
 
 Device / HW | Interface | Recommended
 ---|---|---|
-Meanwell | CAN | [RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) or [Fischl USBTin](https://www.fischl.de/usbtin/)<br/> ![JKBms RS485](/pictures/jkbms_rs485.JPG "JKBms RS485") - ![Fischl USBTin](/pictures/usbtin.jpg "Fischl USBTin")
-Lumentree | RS232 | Any simple USB to RS232 adapter
+Meanwell | CAN | [RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) or [Fischl USBTin](https://www.fischl.de/usbtin/)<br/> ![JKBms RS485](/pictures/jkbms_rs485.JPG "JKBms RS485")   ![Fischl USBTin](/pictures/usbtin.jpg "Fischl USBTin")
+Lumentree | RS232 | Any simple USB to RS232 adapter<br/> ![USB RS232](/pictures/usbrs232.jpg "USB RS232")
 JKBMS | RS485 | [RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) with original JKRS485 adapter
 
 
