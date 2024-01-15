@@ -1245,7 +1245,7 @@ if (cfg.Selected_LCD != 0):
     mylogs.info("Init display")
     if (cfg.Selected_LCD == 1):
         try:
-          display = i2clcd()
+          display = i2clcd(cfg.lcdi2cadr)
           display.lcd_clear()
         except Exception as e:
             mylogs.error("\n\nERROR INIT DISPLAY !\n")
@@ -1289,10 +1289,13 @@ if (cfg.Selected_Device_Charger <=1):
     StartStopOperationCharger(0,1)
 
     #Set fixed charge voltage to device BIC and NPB
-    rval = candev.v_out_set(1,cfg.FixedChargeVoltage)
-    mylogs.info("SET CHARGE VOLTAGE: " + str(rval))
-    cfg.MW_EEPROM_COUNTER += 1
-
+    rval = candev.v_out_set(0,0)
+    if(rval != cfg.FixedChargeVoltage):
+        rval = candev.v_out_set(1,cfg.FixedChargeVoltage)
+        cfg.MW_EEPROM_COUNTER += 1
+        mylogs.info("SET CHARGE VOLTAGE: " + str(rval))
+    else:
+        mylogs.info("CHARGE VOLTAGE ALREADY SET: " + str(rval))
 
     if (cfg.Selected_Device_Charger==0):
         #setup Bic2200
@@ -1308,11 +1311,17 @@ if (cfg.Selected_Device_Charger <=1):
                 print("YOU HAVE TO POWER CYCLE OFF/ON THE MEANWELL BIC2200 NOW BY YOURSELF !!")
                 cfg.MW_EEPROM_COUNTER += 2
             sys.exit(1) 
-        
+
         candev.BIC_chargemode(0)
         cfg.BICChargeDisChargeMode = 0
         #set Min Discharge voltage
-        candev.BIC_discharge_v(1,StopDischargeVoltage)
+        rval = candev.BIC_discharge_v(0,0)
+        if(rval != cfg.StopDischargeVoltage):
+            candev.BIC_discharge_v(1,cfg.StopDischargeVoltage)
+            cfg.MW_EEPROM_COUNTER += 1
+            mylogs.info("SET DISCHARGE VOLTAGE: " + str(rval))
+        else:
+            mylogs.info("DISCHARGE VOLTAGE ALREADY SET: " + str(rval))
         
     if (cfg.Selected_Device_Charger==1):
         #setup NPB
