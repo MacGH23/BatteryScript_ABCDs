@@ -66,6 +66,7 @@ if logtoconsole == 1:
 
 jk = jkbms(DEVPATH,LOGLEVEL)
 jk.jkbms_open()
+sleep(0.5)
 ST = jk.jkbms_read();
 
 
