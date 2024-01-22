@@ -34,11 +34,13 @@ import datetime
 import signal
 import atexit
 import schedule
-import logging
+import logging, logging.handlers
 import random
 from configupdater import ConfigUpdater
 import paho.mqtt.client as mqtt
 import RPi.GPIO as GPIO
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from io import BytesIO
 
 from Meanwell.mwcan import *
 from Lumentree.lt232 import *
@@ -48,6 +50,113 @@ from Meter.meter import *
 #LCD import
 from LCD.hd44780_i2c import i2clcd
 
+#######################################################################
+# WEBSERVER CLASS #####################################################
+#######################################################################
+
+class WS(BaseHTTPRequestHandler):
+    
+        def _set_headers(self):
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
+            return
+            
+        def _gettableentry(self, parameter,value):
+            Button = 'n.a.'
+            if((parameter=='ChargerEnabled') or (parameter=='DisChargerEnabled')):
+                Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Toggle {parameter}</button></form>'
+
+            tabcontent = '<tr>\n'+ \
+                        f'<td style="border-style: solid; border-width: 1px;"><p>{parameter}</p></td>\n' + \
+                        f'<td style="border-style: solid; width: 50px; text-align: center; border-width: 1px;">{value}</td>\n'            + \
+                        f'<td style="border-style: solid; border-width: 1px;">{Button}</td>\n'           + \
+                         '</tr>\n' 
+            
+            return tabcontent
+    
+        def _html(self, message):
+            """This just generates an HTML document that includes `message`
+            """
+            content = '<!DOCTYPE HTML>\n' + \
+                      '<meta http-equiv="refresh" content="30">' + \
+                      '<html>\n<body>\n<h1>' + \
+                      'Welcome to ABCDs WebServer Interface - WIP<br>' + \
+                      str(message) + \
+                      '</h1><br>\n' + \
+                      '<form action="/" method="post"><button name=Refresh type="submit" value=Refresh>Refresh site</button></form>'+\
+                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;">'+ \
+                      '<tbody>' + \
+                      self._gettableentry('CurrentWattValue',status.CurrentWattValue) + \
+                      self._gettableentry('CurrentTotalWatt',status.CurrentTotalWatt) + \
+                      self._gettableentry('CurrentAverageWatt',status.CurrentAverageWatt) + \
+                      self._gettableentry('LastWattUsedInDevice',status.LastWattValueUsedinDevice) + \
+                      self._gettableentry('ChargerEnabled',status.ChargerEnabled) + \
+                      self._gettableentry('DisChargerEnabled',status.DisChargerEnabled) + \
+                      self._gettableentry('BMSSOC',status.BMSSOC) + \
+                      self._gettableentry('BatteryVoltage',status.BatteryVoltage) + \
+                      '</tbody>' + \
+                      '</table>'+ \
+                      '<form action="/" method="get">\n'+ \
+                      '<label for="Maxwatt">Maxwatt:</label>'+ \
+                      '<input type="text" id="Maxwatt" name="Maxwatt"><br><br>\n'+ \
+                      '<label for="Minwatt">Minwatt:</label>\n'+ \
+                      '<input type="text" id="Minwatt" name="Minwatt"><br><br>\n'+ \
+                      '<button type="submit">Submit</button>\n'+ \
+                      '<button type="submit" formmethod="post">Submit using POST</button>\n'+ \
+                      '</form>\n</body>\n</html>\n'
+    
+            return content.encode("utf8")  # NOTE: must return a bytes object!
+    
+        def do_GET(self):
+            mylogs.debug("WebServer: GET")
+            self._set_headers()
+            self.wfile.write(self._html("Read Data"))
+            return
+    
+        def do_HEAD(self):
+            self._set_headers()
+            return
+    
+        def do_POST(self):
+            mylogs.debug("WebServer: POST")
+            self._set_headers()
+            todo = ''
+    
+            content_length = int(self.headers['Content-Length'])
+            bodybytes = self.rfile.read(content_length)
+            bodystr   = bodybytes.decode("UTF-8")
+            bodyitem  = bodystr.split('&')        
+    
+            bodyitems = {}
+            for item in bodyitem:
+                variable, value = item.split('=')
+                bodyitems[variable] = value
+                mylogs.info("WebServer: " + variable + ' - ' + value)
+
+                if(variable == 'ChargerEnabled'):
+                    mylogs.info("WebServer: ChargerEnabled button pressed")
+                    todo = 'ChargerEnabled Toggle done'
+                    status.ChargerEnabled = 1 - status.ChargerEnabled
+
+                if(variable == 'DisChargerEnabled'):
+                    mylogs.info("WebServer: DisChargerEnabled button pressed")
+                    todo = 'DisChargerEnabled Toggle done'
+                    status.DisChargerEnabled = 1 - status.DisChargerEnabled
+
+                if(variable == 'Refresh'):
+                    mylogs.info("WebServer: Refresh")
+                    todo = 'Refresh done'
+    
+            self.wfile.write(self._html(todo))
+            return
+
+
+#######################################################################
+# WEBSERVER CLASS END #################################################
+#######################################################################
+
+
 #########################################
 ##class config
 class Devicestatus:
@@ -55,7 +164,7 @@ class Devicestatus:
     def __init__(self):
         self.configfile                 = ""
         self.ChargerEnabled             = 1   # for remote enable and disable
-        self.DisChargerEnabled          = 1   # for remote enable and disable
+        self.DisChargerEnabled          = 0   # for remote enable and disable
         self.CurrentWattValue           = 0   # from Meter
         self.CurrentTotalWatt           = 0   # Used for Device charger or discharger; -x = SOLAR, +x = GRID
         self.CurrentAverageWatt         = 0   # Current calculated Average Watt 
@@ -101,13 +210,18 @@ class chargerconfig:
 
         if (self.logtofile == 1):
             if self.logappendfile == 1:
-                file = logging.FileHandler(self.logpath, mode='a')
+                filehandler = logging.FileHandler(self.logpath, mode='a')
             else:
-                file = logging.FileHandler(self.logpath, mode='w')
-            file.setLevel(self.loglevel)
+                filehandler = logging.FileHandler(self.logpath, mode='w')
+                #filehandler = logging.handlers.RotatingFileHandler(self.logpath, mode='w', backupCount=2)
+                #filehandler = logging.handlers.TimedRotatingFileHandler(self.logpath, when='midnight', backupCount=7, utc=False)
+                #filehandler = logging.handlers.TimedRotatingFileHandler(self.logpath, when='midnight', backupCount=7, encoding=None, delay=False, utc=False, atTime=None, errors=None)
+
+            filehandler.setLevel(self.loglevel)
             fileformat = logging.Formatter("%(asctime)s:%(module)s:%(levelname)s:%(message)s",datefmt="%H:%M:%S")
-            file.setFormatter(fileformat)
-            mylogs.addHandler(file)
+            filehandler.setFormatter(fileformat)
+            mem = logging.handlers.MemoryHandler(10*1024,30,filehandler,flushOnClose=True)
+            mylogs.addHandler(mem)
 
         if (self.logtoconsole == 1):
             stream = logging.StreamHandler()
@@ -164,6 +278,8 @@ class chargerconfig:
         self.Selected_Device_Charger   =  int(updater["Setup"]["Selected_Device_Charger"].value)
         self.Selected_Device_DisCharger=  int(updater["Setup"]["Selected_Device_DisCharger"].value)
         self.USEDID                    =  updater["Setup"]["USEDID"].value
+        self.ForceBicAlwaysOn          =  int(updater["Setup"]["ForceBicAlwaysOn"].value)
+
         self.StopOnConnectionLost      =  int(updater["Setup"]["StopOnConnectionLost"].value)
         self.GetPowerOption            =  int(updater["Setup"]["GetPowerOption"].value)
         self.PowerControlmethod        =  int(updater["Setup"]["PowerControlmethod"].value)
@@ -218,6 +334,12 @@ class chargerconfig:
         self.gpio3                     =  int(updater["Setup"]["gpio3"].value)
         self.gpio4                     =  int(updater["Setup"]["gpio4"].value)
 
+        self.Use_WebServer             =  int(updater["Setup"]["Use_WebServer"].value)
+        self.WSport                    =  int(updater["Setup"]["WSport"].value)
+        self.WSipadr                   =  updater["Setup"]["WSipadr"].value
+
+
+
         mylogs.info("-- Main --                  ")
         mylogs.info("PowerCalcCount:             " + str(self.powercalccount))
         mylogs.info("PowerControlmethod:         " + str(self.PowerControlmethod))
@@ -239,6 +361,7 @@ class chargerconfig:
 
         mylogs.info("LastDisChargePower_delta:   " + str(self.LastDisChargePower_delta))
         mylogs.info("Voltage_ACIN_correction:    " + str(self.Voltage_ACIN_correction))
+        mylogs.info("ForceBicAlwaysOn:           " + str(self.ForceBicAlwaysOn))
    
         mylogs.info("-- PowerMeter --            ")
         mylogs.info("GetPowerOption:             " + str(self.GetPowerOption))
@@ -304,8 +427,14 @@ class chargerconfig:
 
         mylogs.info("BatteryVoltageSource:       " + str(self.BatteryVoltageSource))
         mylogs.info("BatteryVoltageCorrection:   " + str(self.BatteryVoltageCorrection))
-        
+
+        mylogs.info("-- WebServer Config --      ")
+        mylogs.info("Use_WebServer:              " + str(self.Use_WebServer))
+        mylogs.info("WSport:                     " + str(self.WSport))
+        mylogs.info("WSipadr:                    " + self.WSipadr)
+
         mylogs.info("Read config done ...")
+
         return    
 
     def iniwrite(self):
@@ -321,6 +450,14 @@ class chargerconfig:
       return        
 
 
+
+def runWS(server_class=HTTPServer, handler_class=WS, addr="localhost", port=9000):
+    server_address = (addr, port)
+    httpd = server_class(server_address, handler_class)
+
+    mylogs.info("WEBSERVER START at port: " + str(port))
+    httpd.serve_forever()
+    return
 
 def on_exit():
     mylogs.info("CLEAN UP ...")
@@ -360,7 +497,8 @@ def on_exit():
         printlcd(line1="SCRIPT STOP", line2="REASON UNKNOWN")
         #display.lcd_clear()
         mylogs.info("CLEAN UP: Shutdown LCD/OLED")
-
+        
+    
 def handle_exit(signum, frame):
     mylogs.info("SIGNAL TO STOP RECEIVED")
     sys.exit(0)
@@ -382,6 +520,10 @@ def CheckPatameter():
         
     if(cfg.BatteryVoltageSource == 0):
         mylogs.error("\n\nNO VOLTAGE SOURCE DEFINED!\n")
+        return 0
+
+    if((cfg.ForceBicAlwaysOn == 1) and ((cfg.Selected_Device_Charger + Selected_Device_DisCharger) != 0)):
+        mylogs.error("\n\nYOU CAN ONLY USE ForceBicAlwaysOn WITH BIC2200 AS CHARGER AND DISCHARGER !\n")
         return 0
 
     #looks good continue
@@ -562,12 +704,14 @@ def StartStopOperationCharger(val,force=0):
                 BICChargeDisChargeMode=0
                 cfg.MW_EEPROM_COUNTER += 1
                  
-        if (MeanwellChargerSet(val,force) == True):  #try to set the new ChargeCurrent if possible
+        #try to set the new ChargeCurrent if possible
+        mwset = MeanwellChargerSet(val,force)
+        if (mwset == True): #if true start mw device 
             mylogs.debug("Start Meanwell Device")
-            StartStopOperationMeanwell(1)
+            StartStopOperationMeanwell(1,force)
         else: 
             mylogs.debug("Stop Meanwell Device")
-            StartStopOperationMeanwell(0)     
+            StartStopOperationMeanwell(0,force)     
         return     
     
     if (cfg.Selected_Device_Charger == 255):     #Simulator
@@ -638,7 +782,6 @@ def StartStopOperationDisCharger(val,force=0):
         BICDisChargerSet(Newval,force)
         return     
 
-
     if (cfg.Selected_Device_DisCharger == 1): #Lumentree
         Set_LT_Inverter(Newval,force)    
         return     
@@ -654,27 +797,49 @@ def StartStopOperationDisCharger(val,force=0):
 
 #####################################################################
 # Operation Meanwell
-def StartStopOperationMeanwell(val):
-    mylogs.debug("StartStopOperationMeanwell: " + str(val))
+def StartStopOperationMeanwell(val, force=0):
+    mylogs.debug("StartStopOperationMeanwell value: " + str(val))
+    #read current status from device
     
-    if (val == 0):  
-        if (status.ChargerStatus != 0):
+    if((cfg.Selected_Device_Charger == 0) and (cfg.ForceBicAlwaysOn) and (force==0)):
+        return 1
+    
+    opmode = candev.operation(0,0)
+    if (val == 0): #set to off  
+        if((opmode != 0) or (force==1)):
             candev.operation(1,0)
-            status.ChargerStatus = 0
-            status.ZeroImportWatt = 0   
             mylogs.debug("Meanwell: Operation mode set to: OFF")
             cfg.MW_EEPROM_COUNTER += 1
         else:
             mylogs.debug("Meanwell: Operation mode already OFF")
     else:
-        if (status.ChargerStatus != 1):
+        if((opmode != 1) or (force==1)):
             candev.operation(1,1)   
-            status.ChargerStatus = 1   
             mylogs.debug("Meanwell: Operation mode set to: ON")
             cfg.MW_EEPROM_COUNTER += 1
         else:
             mylogs.debug("Meanwell: Operation mode already ON")
-    
+
+
+
+#    if (val == 0):  
+#        if (status.ChargerStatus != 0):
+#            candev.operation(1,0)
+#            status.ChargerStatus = 0
+#            status.ZeroImportWatt = 0   
+#            mylogs.debug("Meanwell: Operation mode set to: OFF")
+#            cfg.MW_EEPROM_COUNTER += 1
+#        else:
+#            mylogs.debug("Meanwell: Operation mode already OFF")
+#    else:
+#        if (status.ChargerStatus != 1):
+#            candev.operation(1,1)   
+#            status.ChargerStatus = 1   
+#            mylogs.debug("Meanwell: Operation mode set to: ON")
+#            cfg.MW_EEPROM_COUNTER += 1
+#        else:
+#            mylogs.debug("Meanwell: Operation mode already ON")
+   
     return val
 
 
@@ -736,7 +901,6 @@ def BICDisChargerSet(val,force=0):
 
 
 def MeanwellChargerSet(val,force=0):
-    #StartStopOperationDisCharger(0) #has to be in the final enable/disbale function 
 
     #read voltage and current from NBB device
     vout  = candev.v_out_read()
@@ -787,11 +951,12 @@ def MeanwellChargerSet(val,force=0):
                     status.LastChargerSetCurrent = IntCurrent;
                     cfg.MW_EEPROM_COUNTER += 1
                     OPStart = True #device start or continue
+                    
             status.actchargercounter = 1 #Reset counter to 1 
         else:
             mylogs.info("Meanwell: Wait for next change: " + str(status.actchargercounter) + "  of: " + str(cfg.MeterUpdateCounter))
             status.actchargercounter += 1
-            if(status.ChargerStatus == 0):#do not chnage the current status
+            if(status.ChargerStatus == 0):#do not change the current status
                 OPStart = False
             else:
                 OPStart = True             
@@ -801,7 +966,13 @@ def MeanwellChargerSet(val,force=0):
             OPStart = True #device start or continue
         
               
-    
+    if(OPStart):
+        status.ChargerStatus  = 1
+    else:
+        status.ChargerStatus  = 0
+        status.ZeroImportWatt = 0
+       
+
     sleep(0.3)
     status.LastChargerGetCurrent  = candev.i_out_read()
     NewVal = int((status.LastChargerGetCurrent*vout)/10000)
@@ -957,7 +1128,7 @@ def Set_LT_Inverter(val,force=0):
         mylogs.error("LUMMENTREE SET EXEPTION !")
         mylogs.error(str(e))
         status.LastWattValueUsedinDevice = 10 #force to go here
-        status.DisChargerStatus = 1           #prevent not setting if LT is back again 
+        status.DisChargerStatus = 1           #prevent not setting off, if LT is back again 
         ReOpen_LT()
 
     mylogs.info("Read_LT_Inverter Total: " + str(status.LastWattValueUsedinDevice))
@@ -1297,6 +1468,7 @@ if (cfg.Selected_Device_Charger <=1):
     else:
         mylogs.info("CHARGE VOLTAGE ALREADY SET: " + str(rval))
 
+    #Meanwell BIC-2200 specific
     if (cfg.Selected_Device_Charger==0):
         #setup Bic2200
         #set to charge mode first
@@ -1311,18 +1483,20 @@ if (cfg.Selected_Device_Charger <=1):
                 print("YOU HAVE TO POWER CYCLE OFF/ON THE MEANWELL BIC2200 NOW BY YOURSELF !!")
                 cfg.MW_EEPROM_COUNTER += 2
             sys.exit(1) 
-
-        candev.BIC_chargemode(0)
-        cfg.BICChargeDisChargeMode = 0
-        #set Min Discharge voltage
-        rval = candev.BIC_discharge_v(0,0)
-        if(rval != cfg.StopDischargeVoltage):
-            candev.BIC_discharge_v(1,cfg.StopDischargeVoltage)
-            cfg.MW_EEPROM_COUNTER += 1
-            mylogs.info("SET DISCHARGE VOLTAGE: " + str(rval))
-        else:
-            mylogs.info("DISCHARGE VOLTAGE ALREADY SET: " + str(rval))
         
+        c = candev.BIC_chargemode(0,0)
+        if(c==1):
+            c = candev.BIC_chargemode(1,0)
+            cfg.MW_EEPROM_COUNTER += 1
+            
+        cfg.BICChargeDisChargeMode = 0
+        
+        #start BIC2200 imidiatelly if ForceBicAlwaysOn is set
+        if(cfg.ForceBicAlwaysOn):
+            StartStopOperationMeanwell(1,1)
+            
+
+    #Meanwell NBP specific
     if (cfg.Selected_Device_Charger==1):
         #setup NPB
         cuve = candev.NPB_curve_config(0,0,0) #Bit 7 should be 0
@@ -1339,17 +1513,32 @@ if (cfg.Selected_Device_Charger <=1):
         mylogs.error("Config max charge current is too high ! " + str(cfg.MaxChargeCurrent))
         mylogs.error("Use max charge current from device ! " + str(candev.dev_MaxChargeCurrent))
         cfg.MaxChargeCurrent = candev.dev_MaxChargeCurrent
+        sys.exit(1)
 
     if (cfg.MinChargeCurrent < candev.dev_MinChargeCurrent):
         mylogs.error("Config min charge current is too low ! " + str(cfg.MinChargeCurrent))
         mylogs.error("Use min charge current from device ! " + str(candev.dev_MinChargeCurrent))
         cfg.MinChargeCurrent = candev.dev_MinChargeCurrent
+        sys.exit(1)
 
 #################################################################
 #################################################################
 ############  D I S C H A R G E R - S E C T I O N  ##############
 #################################################################
 #################################################################
+
+# Meanwell BIC-2200
+if (cfg.Selected_Device_DisCharger == 0): 
+    #set Min Discharge voltage
+    rval = candev.BIC_discharge_v(0,0)
+    if(rval != cfg.StopDischargeVoltage):
+        candev.BIC_discharge_v(1,cfg.StopDischargeVoltage)
+        cfg.MW_EEPROM_COUNTER += 1
+        mylogs.info("SET DISCHARGE VOLTAGE: " + str(rval))
+    else:
+        mylogs.info("DISCHARGE VOLTAGE ALREADY SET: " + str(rval))
+
+
 # Lumentree / Trucki init
 if ((cfg.Selected_Device_DisCharger == 1) or (cfg.lt_foreceoffonstartup == 1)):
     #Init and get get Type of device
@@ -1508,6 +1697,16 @@ if (cfg.GetPowerOption==255):
     schedule.every(2).seconds.do(simulator_request)                      # Start every 2s
     mylogs.debug("USE SIMULATOR for Meter")
 
+
+#################################################################
+# Start WebServer
+if (cfg.Use_WebServer==1):
+    try:
+        runWS(addr=cfg.WSipadr, port=cfg.WSport)
+    except Exception as e:
+        mylogs.error("EXCEPTION STARTING WEBSERVER")
+        mylogs.error(str(e))
+        sys.exit(1)        
 
 #################################################################
 #################################################################
