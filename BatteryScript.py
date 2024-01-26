@@ -75,18 +75,71 @@ class WS(BaseHTTPRequestHandler):
             
             return tabcontent
     
-        def _html(self, message):
+        def _beginhtml(self, message, refreshtime, pagepath):
+            content = '<!DOCTYPE HTML>\n' + \
+                      f'<meta http-equiv="refresh" content="{refreshtime}">\n' + \
+                      '<html>\n<body>\n<h1>' + \
+                      'Welcome to ABCDs WebServer Interface - WIP\n' + \
+                      '</h1>\n' + \
+                      'Links: &nbsp;<a href="/">Show current Status</a>&nbsp;&nbsp;&nbsp;' + \
+                      '<a href="/config">Show current config</a>&nbsp;&nbsp;&nbsp;' + \
+                      '<a href="/bms">Show current bms status</a>&nbsp;&nbsp;&nbsp;' + \
+                      '<br><br>\n<b>' + \
+                      message + \
+                      '</b></h1><br>\n'
+
+            """
+                      f'<form action="{pagepath}" method="post"><button name=Refresh type="submit" value=Refresh>Refresh site</button></form>'+\
+                      message + \
+                      '</b></h1><br>\n'
+            """
+
+            return content
+
+        def _endhtml(self):
+            content = '</form>\n</body>\n</html>\n'
+            return content 
+
+        def _confightml(self, message):
+            """This just generates an HTML document with the config paramters and include `message`
+            """
+            content = ''
+            for attr, value in vars(cfg).items():
+                content = content + self._gettableentry(attr,value)
+                
+            content = self._beginhtml(message,-1,'/config') + \
+                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;">'+ \
+                      '<tbody>'+ \
+                      content + \
+                      '</tbody>' + \
+                      '</table>'+ \
+                      self._endhtml()
+                
+            return content.encode("utf8")  # NOTE: must return a bytes object!
+
+        def _bmshtml(self, message):
+            """This just generates an HTML document with the bms paramters and include `message`
+            """
+            content = ''
+            for attr, value in vars(BMSstatus).items():
+                content = content + self._gettableentry(attr,value)
+                
+            content = self._beginhtml(message,-1,'/bms') + \
+                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;">'+ \
+                      '<tbody>'+ \
+                      content + \
+                      '</tbody>' + \
+                      '</table>'+ \
+                      self._endhtml()
+                
+            return content.encode("utf8")  # NOTE: must return a bytes object!
+
+        def _statushtml(self, message):
             """This just generates an HTML document that includes `message`
             """
-            content = '<!DOCTYPE HTML>\n' + \
-                      '<meta http-equiv="refresh" content="30">' + \
-                      '<html>\n<body>\n<h1>' + \
-                      'Welcome to ABCDs WebServer Interface - WIP<br>' + \
-                      str(message) + \
-                      '</h1><br>\n' + \
-                      '<form action="/" method="post"><button name=Refresh type="submit" value=Refresh>Refresh site</button></form>'+\
+            content = self._beginhtml(str(message),30,'/') + \
                       '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;">'+ \
-                      '<tbody>' + \
+                      '<tbody>'+ \
                       self._gettableentry('CurrentWattValue',status.CurrentWattValue) + \
                       self._gettableentry('CurrentTotalWatt',status.CurrentTotalWatt) + \
                       self._gettableentry('CurrentAverageWatt',status.CurrentAverageWatt) + \
@@ -103,15 +156,19 @@ class WS(BaseHTTPRequestHandler):
                       '<label for="Minwatt">Minwatt:</label>\n'+ \
                       '<input type="text" id="Minwatt" name="Minwatt"><br><br>\n'+ \
                       '<button type="submit">Submit</button>\n'+ \
-                      '<button type="submit" formmethod="post">Submit using POST</button>\n'+ \
-                      '</form>\n</body>\n</html>\n'
-    
+                      '<button type="submit" formmethod="post">Submit using POST</button>\n' + \
+                      self._endhtml()
             return content.encode("utf8")  # NOTE: must return a bytes object!
     
         def do_GET(self):
             mylogs.debug("WebServer: GET")
             self._set_headers()
-            self.wfile.write(self._html("Read Data"))
+            if(self.path == '/'):
+                self.wfile.write(self._statushtml("Read Status"))
+            if(self.path == '/config'):
+                self.wfile.write(self._confightml("Read Global Config"))
+            if(self.path == '/bms'):
+                self.wfile.write(self._bmshtml("Read BMS status"))
             return
     
         def do_HEAD(self):
@@ -138,17 +195,27 @@ class WS(BaseHTTPRequestHandler):
                     mylogs.info("WebServer: ChargerEnabled button pressed")
                     todo = 'ChargerEnabled Toggle done'
                     status.ChargerEnabled = 1 - status.ChargerEnabled
+                    self.wfile.write(self._statushtml(todo))
 
                 if(variable == 'DisChargerEnabled'):
                     mylogs.info("WebServer: DisChargerEnabled button pressed")
                     todo = 'DisChargerEnabled Toggle done'
                     status.DisChargerEnabled = 1 - status.DisChargerEnabled
+                    self.wfile.write(self._statushtml(todo))
 
+                """
                 if(variable == 'Refresh'):
                     mylogs.info("WebServer: Refresh")
                     todo = 'Refresh done'
+                    if(self.path == '/'):
+                        self.wfile.write(self._statushtml("Read Status"))
+                    if(self.path == '/config'):
+                        self.wfile.write(self._confightml("Read config"))
+                    if(self.path == '/bms'):
+                        self.wfile.write(self._bmshtml("Read BMS status"))
+                    return
+                """                    
     
-            self.wfile.write(self._html(todo))
             return
 
 
@@ -159,12 +226,24 @@ class WS(BaseHTTPRequestHandler):
 
 #########################################
 ##class config
+class BMS:
+
+    def __init__(self):
+        self.BMSSOC                     = 0 # Battery State of Charge status if BMS is used, if not 100% is used
+        self.BMSCurrent                 = 0
+        self.BMSVoltage                 = 0 # Voltage of BMS
+        self.CellCount                  = 0
+        self.BMSCellVoltage             = []
+        for x in range(24):
+            self.BMSCellVoltage.append(x)
+            self.BMSCellVoltage[x]      = 0
+
 class Devicestatus:
 
     def __init__(self):
         self.configfile                 = ""
         self.ChargerEnabled             = 1   # for remote enable and disable
-        self.DisChargerEnabled          = 0   # for remote enable and disable
+        self.DisChargerEnabled          = 1   # for remote enable and disable
         self.CurrentWattValue           = 0   # from Meter
         self.CurrentTotalWatt           = 0   # Used for Device charger or discharger; -x = SOLAR, +x = GRID
         self.CurrentAverageWatt         = 0   # Current calculated Average Watt 
@@ -324,6 +403,7 @@ class chargerconfig:
         self.Selected_BMS              =  int(updater["Setup"]["Selected_BMS"].value)
         self.bms_device                =  updater["Setup"]["bms_device"].value
         self.BMSminSOC                 =  int(updater["Setup"]["BMSminSOC"].value)
+        self.BMSRestartSOC             =  int(updater["Setup"]["BMSRestartSOC"].value)
 
         self.Selected_LCD              =  int(updater["Setup"]["Selected_LCD"].value)
         self.lcdi2cadr                 =  int(updater["Setup"]["lcdi2cadr"].value)
@@ -406,6 +486,7 @@ class chargerconfig:
         mylogs.info("Selected_BMS:               " + str(self.Selected_BMS))
         mylogs.info("bms_device:                 " + str(self.bms_device))
         mylogs.info("BMSminSOC:                  " + str(self.BMSminSOC))
+        mylogs.info("BMSRestartSOC:              " + str(self.BMSRestartSOC))
 
         mylogs.info("-- LCD --                   ")
         mylogs.info("Selected_LCD:               " + str(self.Selected_LCD))
@@ -615,25 +696,28 @@ def mqttpublish(cleanup=0):
 # BMS Section
 #####################################################################
 def bms_read():
-    if (cfg.Selected_BMS == 0): return
+    if (cfg.Selected_BMS == 0): #disabled return always full, you should really use a SOC methode ! 
+        status.BMSSOC = 100
+        return status.BMSSOC
 
-    #Software BMS, calculate form DC Voltage, not very exact yet, almost no useable right now ;-)
+    #Software BMS, calculate form DC Voltage, not very exact yet, almost not useable right now ;-)
     if (cfg.Selected_BMS == 1): 
-          status.BMSVoltage = 0
-          status.BMSCurrent = 0
+        status.BMSVoltage = 0
+        status.BMSCurrent = 0
 
-          if(status.BatteryVoltage < cfg.CellCount * cfg.CellvoltageMin):   SocVal =   0
-          if(status.BatteryVoltage > cfg.CellCount * 3.05              ):   SocVal =  10
-          if(status.BatteryVoltage > cfg.CellCount * 3.10              ):   SocVal =  20
-          if(status.BatteryVoltage > cfg.CellCount * 3.20              ):   SocVal =  30
-          if(status.BatteryVoltage > cfg.CellCount * 3.22              ):   SocVal =  40
-          if(status.BatteryVoltage > cfg.CellCount * 3.25              ):   SocVal =  50
-          if(status.BatteryVoltage > cfg.CellCount * 3.27              ):   SocVal =  60
-          if(status.BatteryVoltage > cfg.CellCount * 3.29              ):   SocVal =  70
-          if(status.BatteryVoltage > cfg.CellCount * 3.32              ):   SocVal =  80
-          if(status.BatteryVoltage > cfg.CellCount * 3.35              ):   SocVal =  90
-          if(status.BatteryVoltage > cfg.CellCount * cfg.CellvoltageMax):   SocVal = 100
-          status.BMSSOC     = SocVal
+        if(status.BatteryVoltage < cfg.CellCount * cfg.CellvoltageMin):   SocVal =   0
+        if(status.BatteryVoltage > cfg.CellCount * 3.05              ):   SocVal =  10
+        if(status.BatteryVoltage > cfg.CellCount * 3.10              ):   SocVal =  20
+        if(status.BatteryVoltage > cfg.CellCount * 3.20              ):   SocVal =  30
+        if(status.BatteryVoltage > cfg.CellCount * 3.22              ):   SocVal =  40
+        if(status.BatteryVoltage > cfg.CellCount * 3.25              ):   SocVal =  50
+        if(status.BatteryVoltage > cfg.CellCount * 3.27              ):   SocVal =  60
+        if(status.BatteryVoltage > cfg.CellCount * 3.29              ):   SocVal =  70
+        if(status.BatteryVoltage > cfg.CellCount * 3.32              ):   SocVal =  80
+        if(status.BatteryVoltage > cfg.CellCount * 3.35              ):   SocVal =  90
+        if(status.BatteryVoltage > cfg.CellCount * cfg.CellvoltageMax):   SocVal = 100
+        status.BMSSOC     = SocVal
+        return status.BMSSOC
 
     #JKBMS reading
     if (cfg.Selected_BMS == 2):
@@ -646,20 +730,31 @@ def bms_read():
           mylogs.debug("BMS: Temp_Fet : " + str(jk.temp_fet))                                                                                                    
           mylogs.debug("BMS: Temp_1   : " + str(jk.temp_1))                                                                                                    
           mylogs.debug("BMS: temp_2   : " + str(jk.temp_2))                                                                                                    
-          mylogs.debug ("BMS: BatVolt  : " + str(jk.voltage/100))                                                                                                    
-          mylogs.debug ("BMS: Current  : " + str(jk.act_current/100))                                                                                                    
-          mylogs.debug ("BMS: BMSSOC   : " + str(jk.soc))                                                                                                    
+          mylogs.debug("BMS: BatVolt  : " + str(jk.voltage/100))                                                                                                    
+          mylogs.debug("BMS: Current  : " + str(jk.act_current/100))                                                                                                    
+          mylogs.debug("BMS: BMSSOC   : " + str(jk.soc))                                                                                                    
   
           status.BMSVoltage = jk.voltage
           status.BMSCurrent = jk.act_current
           status.BMSSOC     = jk.soc 
-            
+
+          BMSstatus.CellCount  = jk.cell_count
+          BMSstatus.BMSSOC     = jk.soc
+          BMSstatus.BMSCurrent = jk.act_current
+          BMSstatus.BMSVoltage = jk.voltage
+          for i in range(BMSstatus.CellCount) :                                                                             
+              BMSstatus.BMSCellVoltage[i] = jk.cells[i]                                                                                                    
+
         except Exception as e:
             mylogs.error("JKBMS READ EXEPTION !")
             mylogs.error(str(e))
             status.BMSSOC = 0
-            
-        return status.BMSSOC         
+
+        return status.BMSSOC
+
+    mylogs.error("UNKNOWN BMS USED ! Check Configuration !")
+    sys.exit(1)
+    return
 
 
 #####################################################################
@@ -696,30 +791,17 @@ def StartStopOperationCharger(val,force=0):
             return
 
     if (cfg.Selected_Device_Charger <= 1): #BIC and NPB-abc0
-        #For BIC set Charge mode first
-        if cfg.Selected_Device_Charger == 0: #BIC2200
-            if(cfg.BICChargeDisChargeMode==1):
-                mylogs.info("StartStopOperationCharger: Set BIC2200 to Charge Mode")
-                candev.BIC_chargemode(0)  #set BIC to Chargemode
-                BICChargeDisChargeMode=0
-                cfg.MW_EEPROM_COUNTER += 1
-                 
         #try to set the new ChargeCurrent if possible
-        mwset = MeanwellChargerSet(val,force)
-        if (mwset == True): #if true start mw device 
-            mylogs.debug("Start Meanwell Device")
-            StartStopOperationMeanwell(1,force)
-        else: 
-            mylogs.debug("Stop Meanwell Device")
-            StartStopOperationMeanwell(0,force)     
-        return     
+        MeanwellChargerSet(val,force)
+        return
     
     if (cfg.Selected_Device_Charger == 255):     #Simulator
         status.LastWattValueUsedinDevice = 0;  #prevent wrong calulation
         mylogs.info("Simulator Charger set to: " + str(val) + "W")
         return     
 
-    mylogs.warning("Charger type not supported yet")
+    mylogs.error("Charger type not supported yet")
+    sys.exit(1)
     return
 
 
@@ -731,7 +813,7 @@ def StartStopOperationDisCharger(val,force=0):
         val = 0
 
     #if the Battery is not totally empty anymore, start Discharging
-    if((status.BatteryEMPTY == 1) and (status.BatteryVoltage >= cfg.RestartDisChargevoltage)):
+    if((status.BatteryEMPTY == 1) and (status.BatteryVoltage >= cfg.RestartDisChargevoltage) and (status.BMSSOC >=cfg.BMSRestartSOC)):
         mylogs.info("StartStopOperationDisCharger: Battery Discharging allowed again. Current Volatge: " + str(status.BatteryVoltage/100) + " (Restart Voltage: " + str(cfg.RestartDisChargevoltage/100) + ")")
         status.BatteryEMPTY = 0
 
@@ -740,7 +822,7 @@ def StartStopOperationDisCharger(val,force=0):
         status.BatteryEMPTY = 1
 
     if(status.BatteryEMPTY == 1):
-        mylogs.info("StartStopOperationDisCharger: Battery EMPTY ! Battery Voltage: " + str(status.BatteryVoltage/100))
+        mylogs.info("StartStopOperationDisCharger: Battery EMPTY ! Battery Voltage: " + str(status.BatteryVoltage/100) + ' - SOC: ' + str(status.BMSSOC))
         val = 0
 
     if (force==0): #if force = 1, proceeed without any logic 
@@ -773,12 +855,6 @@ def StartStopOperationDisCharger(val,force=0):
     #Which Device used
     mylogs.debug("StartStopOperationDisCharger: " + str(Newval))
     if (cfg.Selected_Device_DisCharger == 0): #Meanwell BIC-2200
-        if(cfg.BICChargeDisChargeMode==0):
-            mylogs.info("StartStopOperationDisCharger: Set BIC2200 to DisCharge Mode")
-            candev.BIC_chargemode(1)  #set BIC to DisChargemode
-            BICChargeDisChargeMode=1
-            cfg.MW_EEPROM_COUNTER += 1
-
         BICDisChargerSet(Newval,force)
         return     
 
@@ -845,6 +921,12 @@ def StartStopOperationMeanwell(val, force=0):
 
 def BICDisChargerSet(val,force=0):
 
+    if(cfg.BICChargeDisChargeMode==0):
+        mylogs.info("StartStopOperationDisCharger: Set BIC2200 to DisCharge Mode")
+        candev.BIC_chargemode(1)  #set BIC to DisChargemode
+        BICChargeDisChargeMode=1
+        cfg.MW_EEPROM_COUNTER += 1
+
     #read voltage from BIC device
     vout  = candev.v_out_read()
     
@@ -901,6 +983,14 @@ def BICDisChargerSet(val,force=0):
 
 
 def MeanwellChargerSet(val,force=0):
+
+    #For BIC set Charge mode first
+    if cfg.Selected_Device_Charger == 0: #BIC2200
+        if(cfg.BICChargeDisChargeMode==1):
+            mylogs.info("StartStopOperationCharger: Set BIC2200 to Charge Mode")
+            candev.BIC_chargemode(0)  #set BIC to Chargemode
+            BICChargeDisChargeMode=0
+            cfg.MW_EEPROM_COUNTER += 1
 
     #read voltage and current from NBB device
     vout  = candev.v_out_read()
@@ -966,11 +1056,11 @@ def MeanwellChargerSet(val,force=0):
             OPStart = True #device start or continue
         
               
-    if(OPStart):
-        status.ChargerStatus  = 1
-    else:
-        status.ChargerStatus  = 0
-        status.ZeroImportWatt = 0
+#    if(OPStart):
+#        status.ChargerStatus  = 1
+#    else:
+#        status.ChargerStatus  = 0
+#        status.ZeroImportWatt = 0
        
 
     sleep(0.3)
@@ -978,7 +1068,18 @@ def MeanwellChargerSet(val,force=0):
     NewVal = int((status.LastChargerGetCurrent*vout)/10000)
     mylogs.info("Meanwell: Battery_Vout:" + str(vout/100) + ":V: I_out:" + str(status.LastChargerGetCurrent/100) + ":A: I Calc:" + str(IntCurrent/100) + ":A - GET ACT: " + str(NewVal) + "W")
     status.LastWattValueUsedinDevice = NewVal*(-1)
-    
+
+    #try to set the new ChargeCurrent if possible
+    if (OPStart == True): #if true start mw device 
+        mylogs.debug("Start Meanwell Device")
+        status.ChargerStatus  = 1
+        StartStopOperationMeanwell(1,force)
+    else: 
+        mylogs.debug("Stop Meanwell Device")
+        status.ChargerStatus  = 0
+        status.ZeroImportWatt = 0
+        StartStopOperationMeanwell(0,force)     
+
     return OPStart
 
 
@@ -1608,6 +1709,7 @@ if (cfg.Selected_Device_DisCharger == 255):
 #################################################################
 # BMS INIT
 if (cfg.Selected_BMS != 0):
+    BMSstatus = BMS()
     mylogs.info("Init BMS")
     if (cfg.Selected_BMS == 2):
         try:
@@ -1714,7 +1816,7 @@ if (cfg.Use_WebServer==1):
 if(CheckPatameter() == 0):
     print("Someting wrong with yout paramaters - Check all settings")
     mylogs.error("\n\nSometing wrong with yout paramaters - Check all settings!\n")
-    sys.exit()
+    sys.exit(1)
 
 #################################################################
 #################################################################
