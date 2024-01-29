@@ -8,6 +8,7 @@ import os
 import sys
 import signal
 import atexit
+from time import sleep
 from jkbms import *
 
 
@@ -80,6 +81,6 @@ print("Temp_1   : " + str(jk.temp_1))
 print("temp_2   : " + str(jk.temp_2))                                                                                                    
 print("BatVolt  : " + str(jk.voltage/100))                                                                                                    
 print("Current  : " + str(jk.act_current/100))                                                                                                    
-print("RemCap   : " + str(jk.soc))                                                                                                    
+print("SOC      : " + str(jk.soc))                                                                                                    
          
 sys.exit(0)

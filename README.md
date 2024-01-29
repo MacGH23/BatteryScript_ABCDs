@@ -2,7 +2,8 @@
 
 Python3 script for fully automatic charge and discharge a DIY battery for photovoltaic systems to provide a "zero feed-in".<br><br>
 **WARNING - USE THIS SCRIPT TOTALLY ON YOUR OWN RISK !!! (needed to add ;-)<br><br>** 
-The idea is that everyone can add new devices and provide it to the community.<br><br>
+The idea of this script is to provide a framework for handling the power stuff, <br> 
+and everyone can add new devices and provide it to the community.<br><br>
 Current tested/running on a Raspberry Pi:
 - Raspberry Pi Zero
 - Raspberry Pi 2<br>
@@ -10,8 +11,8 @@ Current tested/running on a Raspberry Pi:
 Should work on any Raspberry Pi. <br>
 
 **Status Webserver:<br>**
-For a better overview a own webserver at port 9000 is available.<br>
-Here you can have a quick overview of the current status ans you can enable and disbale Charger and DisCharger
+For a better overview a own webserver at port 9000 is available (can be configured in conf file).<br>
+Here you can have a quick overview of the current status, current config and BMS. <br> You can also enable and disable Charger and DisCharger
 
 **Current supported hardware:<br>**
 **Charger:**
@@ -135,6 +136,14 @@ To start using TMUX you can start_tmux.sh<br>
 `./start_tmux.sh`<br>
 To connect to Tmux:<br>
 `./ShowBS.sh`<br>
+
+**Add new devices:<br>**
+You have to provide the interface to the device. If possible add a class in a subfolder for easier handling:<br>
+Add a:<br>
+* Dis or Charger_[Device] function for the final communication<br>
+* Add the devices in the StartStop[Dis]Charger functions
+* For BMS devices see the BMS sections for it
+* Add the initialisation and shutdown code in "main" and "onexit"<br><br>
 
 **Credits:<br>**
 Thanks to:<br>

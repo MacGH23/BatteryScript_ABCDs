@@ -41,6 +41,7 @@ import paho.mqtt.client as mqtt
 import RPi.GPIO as GPIO
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from io import BytesIO
+from subprocess import check_output
 
 from Meanwell.mwcan import *
 from Lumentree.lt232 import *
@@ -64,7 +65,7 @@ class WS(BaseHTTPRequestHandler):
             
         def _gettableentry(self, parameter,value):
             Button = 'n.a.'
-            if((parameter=='ChargerEnabled') or (parameter=='DisChargerEnabled')):
+            if((parameter=='ChargerEnabled') or (parameter=='DisChargerEnabled') or (parameter=='WebAutoRefresh')):
                 Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Toggle {parameter}</button></form>'
 
             tabcontent = '<tr>\n'+ \
@@ -76,11 +77,18 @@ class WS(BaseHTTPRequestHandler):
             return tabcontent
     
         def _beginhtml(self, message, refreshtime, pagepath):
+            if(status.WebAutoRefresh == 0):
+                refreshtime = -1
+                
             content = '<!DOCTYPE HTML>\n' + \
                       f'<meta http-equiv="refresh" content="{refreshtime}">\n' + \
-                      '<html>\n<body>\n<h1>' + \
-                      'Welcome to ABCDs WebServer Interface - WIP\n' + \
-                      '</h1>\n' + \
+                      '<html>\n' + \
+                      '<head>\n' + \
+                      '<title>ABCDs Script Web Server</title>\n' + \
+                      f'<base href={cfg.WSipadr}:{cfg.WSport}/"  target="_parent"/>\n' + \
+                      '</head>\n' + \
+                      '<body>\n' + \
+                      '<h1>Welcome to ABCDs WebServer Interface - WIP</h1>\n' + \
                       'Links: &nbsp;<a href="/">Show current Status</a>&nbsp;&nbsp;&nbsp;' + \
                       '<a href="/config">Show current config</a>&nbsp;&nbsp;&nbsp;' + \
                       '<a href="/bms">Show current bms status</a>&nbsp;&nbsp;&nbsp;' + \
@@ -97,7 +105,8 @@ class WS(BaseHTTPRequestHandler):
             return content
 
         def _endhtml(self):
-            content = '</form>\n</body>\n</html>\n'
+            content = '</body>\n' + \
+                      '</html>\n'
             return content 
 
         def _confightml(self, message):
@@ -124,7 +133,7 @@ class WS(BaseHTTPRequestHandler):
             for attr, value in vars(BMSstatus).items():
                 content = content + self._gettableentry(attr,value)
                 
-            content = self._beginhtml(message,-1,'/bms') + \
+            content = self._beginhtml(message,30,'/bms') + \
                       '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;">'+ \
                       '<tbody>'+ \
                       content + \
@@ -147,7 +156,9 @@ class WS(BaseHTTPRequestHandler):
                       self._gettableentry('ChargerEnabled',status.ChargerEnabled) + \
                       self._gettableentry('DisChargerEnabled',status.DisChargerEnabled) + \
                       self._gettableentry('BMSSOC',status.BMSSOC) + \
+                      self._gettableentry('EstBatteryWh',round(status.EstBatteryWh/1000)) + \
                       self._gettableentry('BatteryVoltage',status.BatteryVoltage) + \
+                      self._gettableentry('WebAutoRefresh',status.WebAutoRefresh) + \
                       '</tbody>' + \
                       '</table>'+ \
                       '<form action="/" method="get">\n'+ \
@@ -157,6 +168,7 @@ class WS(BaseHTTPRequestHandler):
                       '<input type="text" id="Minwatt" name="Minwatt"><br><br>\n'+ \
                       '<button type="submit">Submit</button>\n'+ \
                       '<button type="submit" formmethod="post">Submit using POST</button>\n' + \
+                      '</form>\n' + \
                       self._endhtml()
             return content.encode("utf8")  # NOTE: must return a bytes object!
     
@@ -203,6 +215,12 @@ class WS(BaseHTTPRequestHandler):
                     status.DisChargerEnabled = 1 - status.DisChargerEnabled
                     self.wfile.write(self._statushtml(todo))
 
+                if(variable == 'WebAutoRefresh'):
+                    mylogs.info("WebAutoRefresh button pressed")
+                    todo = 'WebAutoRefresh Toggle done'
+                    status.WebAutoRefresh = 1 - status.WebAutoRefresh
+                    self.wfile.write(self._statushtml(todo))
+
                 """
                 if(variable == 'Refresh'):
                     mylogs.info("WebServer: Refresh")
@@ -217,6 +235,13 @@ class WS(BaseHTTPRequestHandler):
                 """                    
     
             return
+
+        def log_request(self, code=None, size=None):
+            host, port = self.client_address[:2]
+            mylogs.info('<-> HTTP Request from: ' + host + ' - Site: ' + self.path)
+    
+#        def log_message(self, format, *args):
+#            print('Message')           
 
 
 #######################################################################
@@ -242,6 +267,7 @@ class Devicestatus:
 
     def __init__(self):
         self.configfile                 = ""
+        self.LastMeterTime              = datetime.datetime.now()
         self.ChargerEnabled             = 1   # for remote enable and disable
         self.DisChargerEnabled          = 1   # for remote enable and disable
         self.CurrentWattValue           = 0   # from Meter
@@ -264,257 +290,277 @@ class Devicestatus:
         self.BMSSOC                     = 100 # Battery State of Charge status if BMS is used, if not 100% is used
         self.BMSCurrent                 = 0
         self.BMSVoltage                 = 0   # Voltage of BMS
+        self.EstBatteryWh               = 0
         self.ChargerVoltage             = 0   # Voltage of Charger
         self.DisChargerVoltage          = 0   # Voltage of DisCharger
         self.ProcessCount               = 18  # only all 20 conts, mqtt sends every 2 seconds --> 40 Seconde, start with 15 to have the first read after 10seconds
         self.LastPowerArrayPosition     = 0 
         self.actchargercounter          = 100 # only change values after x METER values --> all 2 Seconds new value with chargercounter = 5 => 10seconds, first start ok -> 100
         self.waitchargercounter         = 0 
+        self.DisCharger_efficacy_factor = float(0)
+        self.WebAutoRefresh             = 0
 
 class chargerconfig:
 
     def iniread(self):
-
-        updater = ConfigUpdater()
-        updater.read(status.configfile)
-      
-        self.loglevel       = int(updater["Setup"]["loglevel"].value)
-        self.logpath        = str(updater["Setup"]["logpath"].value)
-        self.logtoconsole   = int(updater["Setup"]["logtoconsole"].value)
-        self.logtofile      = int(updater["Setup"]["logtofile"].value)
-        self.logappendfile  = int(updater["Setup"]["logappendfile"].value)
-        self.logtosyslog    = int(updater["Setup"]["logtosyslog"].value)
-
-        mylogs.setLevel(self.loglevel)
-
-        if (self.logtofile == 1):
-            if self.logappendfile == 1:
-                filehandler = logging.FileHandler(self.logpath, mode='a')
-            else:
-                filehandler = logging.FileHandler(self.logpath, mode='w')
-                #filehandler = logging.handlers.RotatingFileHandler(self.logpath, mode='w', backupCount=2)
-                #filehandler = logging.handlers.TimedRotatingFileHandler(self.logpath, when='midnight', backupCount=7, utc=False)
-                #filehandler = logging.handlers.TimedRotatingFileHandler(self.logpath, when='midnight', backupCount=7, encoding=None, delay=False, utc=False, atTime=None, errors=None)
-
-            filehandler.setLevel(self.loglevel)
-            fileformat = logging.Formatter("%(asctime)s:%(module)s:%(levelname)s:%(message)s",datefmt="%H:%M:%S")
-            filehandler.setFormatter(fileformat)
-            mem = logging.handlers.MemoryHandler(10*1024,30,filehandler,flushOnClose=True)
-            mylogs.addHandler(mem)
-
-        if (self.logtoconsole == 1):
-            stream = logging.StreamHandler()
-            stream.setLevel(self.loglevel)
-            streamformat = logging.Formatter("%(asctime)s:%(module)s:%(levelname)s:%(message)s",datefmt="%H:%M:%S")
-            stream.setFormatter(streamformat)    
-            mylogs.addHandler(stream)
-
-        if (self.logtosyslog == 1):
-            slhandler = SysLogHandler(facility=SysLogHandler.LOG_DAEMON,address='/dev/log')
-            slformat = logging.Formatter("%(asctime)s:%(module)s:%(levelname)s:%(message)s",datefmt="%Y-%m-%d %H:%M:%S")
-            handler.setFormatter(slformat)
-            logger.addHandler(slhandler)
-
-        mylogs.debug("Read config ...")
-
-        self.i_changed_my_config       =  int(updater["Setup"]["i_changed_my_config"].value)
-        self.powercalccount            =  int(updater["Setup"]["powercalccount"].value)
-
-        self.CellCount                 =  int(updater["Setup"]["CellCount"].value)
-        self.CellvoltageMax            =  int(updater["Setup"]["CellvoltageMax"].value)
-        self.CellvoltageMin            =  int(updater["Setup"]["CellvoltageMin"].value)
-        self.CellvoltageMaxRestart     =  int(updater["Setup"]["CellvoltageMaxRestart"].value)
-        self.CellvoltageMinRestart     =  int(updater["Setup"]["CellvoltageMinRestart"].value)
-        self.FixedChargeVoltage        =  self.CellCount * self.CellvoltageMax
-        self.StopDischargeVoltage      =  self.CellCount * self.CellvoltageMin
-        self.RestartChargevoltage      =  self.CellCount * self.CellvoltageMaxRestart
-        self.RestartDisChargevoltage   =  self.CellCount * self.CellvoltageMinRestart
-        self.RestartDisChargevoltage   =  self.CellCount * self.CellvoltageMinRestart
-
-        self.MaxChargeCurrent          =  int(updater["Setup"]["MaxChargeCurrent"].value)
-        self.MinChargeCurrent          =  int(updater["Setup"]["MinChargeCurrent"].value)
-        self.MaxDischargeCurrent       =  int(updater["Setup"]["MaxDischargeCurrent"].value)
-        self.ChargerCurrentDiffHyst    =  int(updater["Setup"]["ChargerCurrentDiffHyst"].value)
-        self.DisChargerCurrentMin      =  int(updater["Setup"]["DisChargerCurrentMin"].value)
-        self.MaxChargeWATT             =  int(updater["Setup"]["MaxChargeWATT"].value)
-        self.MinChargeWATT             =  int(updater["Setup"]["MinChargeWATT"].value)
-        self.LastChargePower_delta     =  int(updater["Setup"]["LastChargePower_delta"].value)
-
-        self.StopMinChargeCurrent      =  int(updater["Setup"]["StopMinChargeCurrent"].value)
-        self.MaxDisChargeWATT          =  int(updater["Setup"]["MaxDisChargeWATT"].value)
-        self.MinDisChargeWATT          =  int(updater["Setup"]["MinDisChargeWATT"].value)
-        self.ZeroDeltaChargerWatt      =  int(updater["Setup"]["ZeroDeltaChargerWatt"].value)
-        self.ZeroDeltaDisChargeWATT    =  int(updater["Setup"]["ZeroDeltaDisChargeWATT"].value)
-        self.MeterUpdateCounter        =  int(updater["Setup"]["MeterUpdateCounter"].value)
-        self.MW_EEPROM_COUNTER         =  int(updater["Setup"]["MW_EEPROM_COUNTER"].value)
-        self.BatteryVoltageSource      =  int(updater["Setup"]["BatteryVoltageSource"].value)
-        self.BatteryVoltageCorrection  =  int(updater["Setup"]["BatteryVoltageCorrection"].value)
-
-
-        self.LastDisChargePower_delta  =  int(updater["Setup"]["LastDisChargePower_delta"].value)
-        self.Voltage_ACIN_correction   =  int(updater["Setup"]["Voltage_ACIN_correction"].value)
+        try:
+            updater = ConfigUpdater()
+            updater.read(status.configfile)
+          
+            self.loglevel       = int(updater["Setup"]["loglevel"].value)
+            self.logpath        = str(updater["Setup"]["logpath"].value)
+            self.logtoconsole   = int(updater["Setup"]["logtoconsole"].value)
+            self.logtofile      = int(updater["Setup"]["logtofile"].value)
+            self.logappendfile  = int(updater["Setup"]["logappendfile"].value)
+            self.logtosyslog    = int(updater["Setup"]["logtosyslog"].value)
     
-        self.Selected_Device_Charger   =  int(updater["Setup"]["Selected_Device_Charger"].value)
-        self.Selected_Device_DisCharger=  int(updater["Setup"]["Selected_Device_DisCharger"].value)
-        self.USEDID                    =  updater["Setup"]["USEDID"].value
-        self.ForceBicAlwaysOn          =  int(updater["Setup"]["ForceBicAlwaysOn"].value)
-
-        self.StopOnConnectionLost      =  int(updater["Setup"]["StopOnConnectionLost"].value)
-        self.GetPowerOption            =  int(updater["Setup"]["GetPowerOption"].value)
-        self.PowerControlmethod        =  int(updater["Setup"]["PowerControlmethod"].value)
-        
-        self.http_schedule_time        =  int(updater["Setup"]["http_schedule_time"].value)
-
-        self.http_get_option           =  int(updater["Setup"]["http_get_option"].value)
-        self.http_ip_address           =  updater["Setup"]["http_ip_address"].value
-        self.http_ip_port              =  updater["Setup"]["http_ip_port"].value
-        self.http_user                 =  updater["Setup"]["http_user"].value
-        self.http_pass                 =  updater["Setup"]["http_pass"].value
-        self.http_emlog_meterindex     =  updater["Setup"]["http_EMLOG_METERINDEX"].value
-        self.http_vzl_UUID             =  updater["Setup"]["http_VZL_UUID"].value
-        self.http_iobrogerobject       =  updater["Setup"]["http_iobrogerobject"].value
-
-
-        self.lt_foreceoffonstartup     =  int(updater["Setup"]["lt_foreceoffonstartup"].value)
-        self.lt_count                  =  int(updater["Setup"]["lt_count"].value)
-
-        self.lt1_device                =  updater["Setup"]["lt1_device"].value
-        self.lt1_address               =  int(updater["Setup"]["lt1_address"].value)
-        self.lt1_maxwatt               =  int(updater["Setup"]["lt1_maxwatt"].value)
-
-        self.lt2_device                =  updater["Setup"]["lt2_device"].value
-        self.lt2_address               =  int(updater["Setup"]["lt2_address"].value)
-        self.lt2_maxwatt               =  int(updater["Setup"]["lt2_maxwatt"].value)
-
-        self.lt3_device                =  updater["Setup"]["lt3_device"].value
-        self.lt3_address               =  int(updater["Setup"]["lt3_address"].value)
-        self.lt3_maxwatt               =  int(updater["Setup"]["lt3_maxwatt"].value)
-        
-        self.mqttserver                =  updater["Setup"]["mqttserver"].value
-        self.mqttport                  =  int(updater["Setup"]["mqttport"].value)
-        self.mqttuser                  =  updater["Setup"]["mqttuser"].value
-        self.mqttpass                  =  updater["Setup"]["mqttpass"].value
-        self.mqttsubscribe             =  updater["Setup"]["mqttsubscribe"].value
-        self.mqttpublish               =  int(updater["Setup"]["mqttpublish"].value)
-        self.mqttpublishWATT           =  updater["Setup"]["mqttpublishWATT"].value
-        self.mqttpublishSOC            =  updater["Setup"]["mqttpublishSOC"].value
-        self.mqttpublishBatVolt        =  updater["Setup"]["mqttpublishBatVolt"].value
-        
-        self.Selected_BMS              =  int(updater["Setup"]["Selected_BMS"].value)
-        self.bms_device                =  updater["Setup"]["bms_device"].value
-        self.BMSminSOC                 =  int(updater["Setup"]["BMSminSOC"].value)
-        self.BMSRestartSOC             =  int(updater["Setup"]["BMSRestartSOC"].value)
-
-        self.Selected_LCD              =  int(updater["Setup"]["Selected_LCD"].value)
-        self.lcdi2cadr                 =  int(updater["Setup"]["lcdi2cadr"].value)
+            mylogs.setLevel(self.loglevel)
+            
+            if (self.logtofile == 1):
+                if self.logappendfile == 1:
+                    filehandler = logging.FileHandler(self.logpath, mode='a')
+                else:
+                    filehandler = logging.FileHandler(self.logpath, mode='w')
+                    #filehandler = logging.handlers.RotatingFileHandler(self.logpath, mode='w', backupCount=2)
+                    #filehandler = logging.handlers.TimedRotatingFileHandler(self.logpath, when='midnight', backupCount=7, utc=False)
+                    #filehandler = logging.handlers.TimedRotatingFileHandler(self.logpath, when='midnight', backupCount=7, encoding=None, delay=False, utc=False, atTime=None, errors=None)
     
-        self.Use_GPIO                  =  int(updater["Setup"]["Use_GPIO"].value)
-        self.gpio1                     =  int(updater["Setup"]["gpio1"].value)
-        self.gpio2                     =  int(updater["Setup"]["gpio2"].value)
-        self.gpio3                     =  int(updater["Setup"]["gpio3"].value)
-        self.gpio4                     =  int(updater["Setup"]["gpio4"].value)
-
-        self.Use_WebServer             =  int(updater["Setup"]["Use_WebServer"].value)
-        self.WSport                    =  int(updater["Setup"]["WSport"].value)
-        self.WSipadr                   =  updater["Setup"]["WSipadr"].value
-
-
-
-        mylogs.info("-- Main --                  ")
-        mylogs.info("PowerCalcCount:             " + str(self.powercalccount))
-        mylogs.info("PowerControlmethod:         " + str(self.PowerControlmethod))
-        mylogs.info("Selected_Device_Charger:    " + str(self.Selected_Device_Charger))
-        mylogs.info("Selected_Device_DisCharger: " + str(self.Selected_Device_DisCharger))
-        mylogs.info("ChargerCurrentDiffHyst:     " + str(self.ChargerCurrentDiffHyst))
-        mylogs.info("DisChargerCurrentMin:       " + str(self.DisChargerCurrentMin))
-        mylogs.info("MaxChargeWATT:              " + str(self.MaxChargeWATT))
-        mylogs.info("MinChargeWATT:              " + str(self.MinChargeWATT))
-        mylogs.info("LastChargePower_delta:      " + str(self.LastChargePower_delta))
-        mylogs.info("MaxDisChargeWATT:           " + str(self.MaxDisChargeWATT))
-        mylogs.info("MinDisChargeWATT:           " + str(self.MinDisChargeWATT))
-
-        mylogs.info("MaxChargeCurrent:           " + str(self.MaxChargeCurrent))
-        mylogs.info("MinChargeCurrent:           " + str(self.MinChargeCurrent))
-        mylogs.info("ZeroDeltaChargerWatt:       " + str(self.ZeroDeltaChargerWatt))
-        mylogs.info("MaxDischargeCurrent:        " + str(self.MaxDischargeCurrent))
-        mylogs.info("ZeroDeltaDisChargeWATT:     " + str(self.ZeroDeltaDisChargeWATT))
-
-        mylogs.info("LastDisChargePower_delta:   " + str(self.LastDisChargePower_delta))
-        mylogs.info("Voltage_ACIN_correction:    " + str(self.Voltage_ACIN_correction))
-        mylogs.info("ForceBicAlwaysOn:           " + str(self.ForceBicAlwaysOn))
-   
-        mylogs.info("-- PowerMeter --            ")
-        mylogs.info("GetPowerOption:             " + str(self.GetPowerOption))
-        mylogs.info("MeterUpdateCounter:         " + str(self.MeterUpdateCounter))
-        mylogs.info("StopOnConnectionLost:       " + str(self.StopOnConnectionLost))
-
-        mylogs.info("-- HTTP --                  ")
-        mylogs.info("http_schedule_time:         " + str(self.http_schedule_time))
-        mylogs.info("http_get_option:            " + str(self.http_get_option))
-        mylogs.info("http_ip_address:            " + self.http_ip_address)
-        mylogs.info("http_ip_port:               " + self.http_ip_port)
-        mylogs.info("http_user:                  " + self.http_user)
-        mylogs.info("http_pass:                  " + self.http_pass)
-        mylogs.info("http_emlog_meterindex:      " + self.http_emlog_meterindex)
-        mylogs.info("http_vzl_UUID:              " + self.http_vzl_UUID)
-        mylogs.info("http_iobrogerobject:        " + self.http_iobrogerobject)
+                filehandler.setLevel(self.loglevel)
+                fileformat = logging.Formatter("%(asctime)s:%(module)s:%(levelname)s:%(message)s",datefmt="%H:%M:%S")
+                filehandler.setFormatter(fileformat)
+                mem = logging.handlers.MemoryHandler(10*1024,30,filehandler,flushOnClose=True)
+                mylogs.addHandler(mem)
+    
+            if (self.logtoconsole == 1):
+                stream = logging.StreamHandler()
+                stream.setLevel(self.loglevel)
+                streamformat = logging.Formatter("%(asctime)s:%(module)s:%(levelname)s:%(message)s",datefmt="%H:%M:%S")
+                stream.setFormatter(streamformat)    
+                mylogs.addHandler(stream)
+    
+            if (self.logtosyslog == 1):
+                slhandler = SysLogHandler(facility=SysLogHandler.LOG_DAEMON,address='/dev/log')
+                slformat = logging.Formatter("%(asctime)s:%(module)s:%(levelname)s:%(message)s",datefmt="%Y-%m-%d %H:%M:%S")
+                handler.setFormatter(slformat)
+                logger.addHandler(slhandler)
+    
+            mylogs.debug("Read config ...")
+    
+            self.i_changed_my_config       =  int(updater["Setup"]["i_changed_my_config"].value)
+            self.powercalccount            =  int(updater["Setup"]["powercalccount"].value)
+    
+            self.CellCount                 =  int(updater["Setup"]["CellCount"].value)
+            self.CellAH                    =  int(updater["Setup"]["CellAH"].value)
+            self.CellvoltageMax            =  int(updater["Setup"]["CellvoltageMax"].value)
+            self.CellvoltageMin            =  int(updater["Setup"]["CellvoltageMin"].value)
+            self.CellvoltageMaxRestart     =  int(updater["Setup"]["CellvoltageMaxRestart"].value)
+            self.CellvoltageMinRestart     =  int(updater["Setup"]["CellvoltageMinRestart"].value)
+            self.FixedChargeVoltage        =  self.CellCount * self.CellvoltageMax
+            self.StopDischargeVoltage      =  self.CellCount * self.CellvoltageMin
+            self.RestartChargevoltage      =  self.CellCount * self.CellvoltageMaxRestart
+            self.RestartDisChargevoltage   =  self.CellCount * self.CellvoltageMinRestart
+            self.RestartDisChargevoltage   =  self.CellCount * self.CellvoltageMinRestart
+            self.BatteryTotalAH            =  round(self.CellCount * self.CellAH * 3.2)
+    
+            self.MaxChargeCurrent          =  int(updater["Setup"]["MaxChargeCurrent"].value)
+            self.MinChargeCurrent          =  int(updater["Setup"]["MinChargeCurrent"].value)
+            self.MaxDischargeCurrent       =  int(updater["Setup"]["MaxDischargeCurrent"].value)
+            self.ChargerCurrentDiffHyst    =  int(updater["Setup"]["ChargerCurrentDiffHyst"].value)
+            self.DisChargerCurrentMin      =  int(updater["Setup"]["DisChargerCurrentMin"].value)
+            self.MaxChargeWATT             =  int(updater["Setup"]["MaxChargeWATT"].value)
+            self.MinChargeWATT             =  int(updater["Setup"]["MinChargeWATT"].value)
+            self.LastChargePower_delta     =  int(updater["Setup"]["LastChargePower_delta"].value)
+    
+            self.StopMinChargeCurrent      =  int(updater["Setup"]["StopMinChargeCurrent"].value)
+            self.MaxDisChargeWATT          =  int(updater["Setup"]["MaxDisChargeWATT"].value)
+            self.MinDisChargeWATT          =  int(updater["Setup"]["MinDisChargeWATT"].value)
+            self.ZeroDeltaChargerWatt      =  int(updater["Setup"]["ZeroDeltaChargerWatt"].value)
+            self.ZeroDeltaDisChargeWATT    =  int(updater["Setup"]["ZeroDeltaDisChargeWATT"].value)
+            self.MeterUpdateCounter        =  int(updater["Setup"]["MeterUpdateCounter"].value)
+            self.MW_EEPROM_COUNTER         =  int(updater["Setup"]["MW_EEPROM_COUNTER"].value)
+            self.BatteryVoltageSource      =  int(updater["Setup"]["BatteryVoltageSource"].value)
+            self.BatteryVoltageCorrection  =  int(updater["Setup"]["BatteryVoltageCorrection"].value)
+            self.EstBatteryWh              =  int(updater["Setup"]["EstBatteryWh"].value)
+    
+            self.LastDisChargePower_delta  =  int(updater["Setup"]["LastDisChargePower_delta"].value)
+            self.Voltage_ACIN_correction   =  int(updater["Setup"]["Voltage_ACIN_correction"].value)
         
-        mylogs.info("-- Meanwell --              ")
-        mylogs.info("USEDID:                     " + str(self.USEDID))
-        mylogs.info("MW_EEPROM_COUNTER:          " + str(self.MW_EEPROM_COUNTER))
-
-        mylogs.info("-- Lumentree --             ")
-        mylogs.info("Lumentree device  1         " + self.lt1_device)
-        mylogs.info("Lumentree address 1         " + str(self.lt1_address))
-        mylogs.info("Lumentree device  2         " + self.lt2_device)
-        mylogs.info("Lumentree address 2         " + str(self.lt2_address))
-        mylogs.info("Lumentree device  3         " + self.lt3_device)
-        mylogs.info("Lumentree address 3         " + str(self.lt3_address))
+            self.Selected_Device_Charger   =  int(updater["Setup"]["Selected_Device_Charger"].value)
+            self.Selected_Device_DisCharger=  int(updater["Setup"]["Selected_Device_DisCharger"].value)
+            self.USEDID                    =  updater["Setup"]["USEDID"].value
+            self.ForceBicAlwaysOn          =  int(updater["Setup"]["ForceBicAlwaysOn"].value)
+            self.BIC2200_efficacy_factor   =  int(updater["Setup"]["BIC2200_efficacy_factor"].value)
+                
+            self.StopOnConnectionLost      =  int(updater["Setup"]["StopOnConnectionLost"].value)
+            self.GetPowerOption            =  int(updater["Setup"]["GetPowerOption"].value)
+            self.PowerControlmethod        =  int(updater["Setup"]["PowerControlmethod"].value)
+            
+            self.http_schedule_time        =  int(updater["Setup"]["http_schedule_time"].value)
+    
+            self.http_get_option           =  int(updater["Setup"]["http_get_option"].value)
+            self.http_ip_address           =  updater["Setup"]["http_ip_address"].value
+            self.http_ip_port              =  updater["Setup"]["http_ip_port"].value
+            self.http_user                 =  updater["Setup"]["http_user"].value
+            self.http_pass                 =  updater["Setup"]["http_pass"].value
+            self.http_emlog_meterindex     =  updater["Setup"]["http_EMLOG_METERINDEX"].value
+            self.http_vzl_UUID             =  updater["Setup"]["http_VZL_UUID"].value
+            self.http_iobrogerobject       =  updater["Setup"]["http_iobrogerobject"].value
+    
+    
+            self.lt_foreceoffonstartup     =  int(updater["Setup"]["lt_foreceoffonstartup"].value)
+            self.lt_count                  =  int(updater["Setup"]["lt_count"].value)
+            self.lt_efficacy_factor        =  int(updater["Setup"]["lt_efficacy_factor"].value)
+    
+            self.lt1_device                =  updater["Setup"]["lt1_device"].value
+            self.lt1_address               =  int(updater["Setup"]["lt1_address"].value)
+            self.lt1_maxwatt               =  int(updater["Setup"]["lt1_maxwatt"].value)
+    
+            self.lt2_device                =  updater["Setup"]["lt2_device"].value
+            self.lt2_address               =  int(updater["Setup"]["lt2_address"].value)
+            self.lt2_maxwatt               =  int(updater["Setup"]["lt2_maxwatt"].value)
+    
+            self.lt3_device                =  updater["Setup"]["lt3_device"].value
+            self.lt3_address               =  int(updater["Setup"]["lt3_address"].value)
+            self.lt3_maxwatt               =  int(updater["Setup"]["lt3_maxwatt"].value)
+            
+            self.mqttserver                =  updater["Setup"]["mqttserver"].value
+            self.mqttport                  =  int(updater["Setup"]["mqttport"].value)
+            self.mqttuser                  =  updater["Setup"]["mqttuser"].value
+            self.mqttpass                  =  updater["Setup"]["mqttpass"].value
+            self.mqttsubscribe             =  updater["Setup"]["mqttsubscribe"].value
+            self.mqttpublish               =  int(updater["Setup"]["mqttpublish"].value)
+            self.mqttpublishWATT           =  updater["Setup"]["mqttpublishWATT"].value
+            self.mqttpublishSOC            =  updater["Setup"]["mqttpublishSOC"].value
+            self.mqttpublishBatVolt        =  updater["Setup"]["mqttpublishBatVolt"].value
+            
+            self.Selected_BMS              =  int(updater["Setup"]["Selected_BMS"].value)
+            self.bms_device                =  updater["Setup"]["bms_device"].value
+            self.BMSminSOC                 =  int(updater["Setup"]["BMSminSOC"].value)
+            self.BMSRestartSOC             =  int(updater["Setup"]["BMSRestartSOC"].value)
+    
+            self.Selected_LCD              =  int(updater["Setup"]["Selected_LCD"].value)
+            self.lcdi2cadr                 =  int(updater["Setup"]["lcdi2cadr"].value)
         
-        mylogs.info("-- MQTT --                  ")
-        mylogs.info("mqttserver:                 " + self.mqttserver)
-        mylogs.info("mqttport:                   " + str(self.mqttport))
-        mylogs.info("mqttuser:                   " + self.mqttuser)
-        mylogs.info("mqttpass:                   " + self.mqttpass)
-        mylogs.info("mqttsubscribe:              " + str(self.mqttsubscribe))
-        mylogs.info("mqttpublish:                " + str(self.mqttpublish))
-        mylogs.info("mqttpublishWATT:            " + str(self.mqttpublishWATT))
-        mylogs.info("mqttpublishSOC:             " + str(self.mqttpublishSOC))
-        mylogs.info("mqttpublishBatVolt:         " + str(self.mqttpublishBatVolt))
+            self.Use_GPIO                  =  int(updater["Setup"]["Use_GPIO"].value)
+            self.gpio1                     =  int(updater["Setup"]["gpio1"].value)
+            self.gpio2                     =  int(updater["Setup"]["gpio2"].value)
+            self.gpio3                     =  int(updater["Setup"]["gpio3"].value)
+            self.gpio4                     =  int(updater["Setup"]["gpio4"].value)
+    
+            self.Use_WebServer             =  int(updater["Setup"]["Use_WebServer"].value)
+            self.WSport                    =  int(updater["Setup"]["WSport"].value)
+            self.WSipadr                   =  updater["Setup"]["WSipadr"].value
+            if(self.WSipadr == ""):
+                try:  
+                    self.WSipadr = check_output(['hostname', '-I']).decode().split()[0]
+                except Exception as e:
+                    mylogs.error("EXCEPTION ON GETTING LOCAL IP ADDRESS - USE EMPTY ONE")
+                    mylogs.error(str(e))
+                    self.WSipadr = ""
+    
+            mylogs.info("-- Main --                  ")
+            mylogs.info("PowerCalcCount:             " + str(self.powercalccount))
+            mylogs.info("PowerControlmethod:         " + str(self.PowerControlmethod))
+            mylogs.info("Selected_Device_Charger:    " + str(self.Selected_Device_Charger))
+            mylogs.info("Selected_Device_DisCharger: " + str(self.Selected_Device_DisCharger))
+            mylogs.info("ChargerCurrentDiffHyst:     " + str(self.ChargerCurrentDiffHyst))
+            mylogs.info("DisChargerCurrentMin:       " + str(self.DisChargerCurrentMin))
+            mylogs.info("MaxChargeWATT:              " + str(self.MaxChargeWATT))
+            mylogs.info("MinChargeWATT:              " + str(self.MinChargeWATT))
+            mylogs.info("LastChargePower_delta:      " + str(self.LastChargePower_delta))
+            mylogs.info("MaxDisChargeWATT:           " + str(self.MaxDisChargeWATT))
+            mylogs.info("MinDisChargeWATT:           " + str(self.MinDisChargeWATT))
+    
+            mylogs.info("MaxChargeCurrent:           " + str(self.MaxChargeCurrent))
+            mylogs.info("MinChargeCurrent:           " + str(self.MinChargeCurrent))
+            mylogs.info("ZeroDeltaChargerWatt:       " + str(self.ZeroDeltaChargerWatt))
+            mylogs.info("MaxDischargeCurrent:        " + str(self.MaxDischargeCurrent))
+            mylogs.info("ZeroDeltaDisChargeWATT:     " + str(self.ZeroDeltaDisChargeWATT))
+    
+            mylogs.info("LastDisChargePower_delta:   " + str(self.LastDisChargePower_delta))
+            mylogs.info("Voltage_ACIN_correction:    " + str(self.Voltage_ACIN_correction))
+            mylogs.info("ForceBicAlwaysOn:           " + str(self.ForceBicAlwaysOn))
+            mylogs.info("BIC2000 efficacy_factor     " + str(self.BIC2200_efficacy_factor))
+       
+            mylogs.info("-- PowerMeter --            ")
+            mylogs.info("GetPowerOption:             " + str(self.GetPowerOption))
+            mylogs.info("MeterUpdateCounter:         " + str(self.MeterUpdateCounter))
+            mylogs.info("StopOnConnectionLost:       " + str(self.StopOnConnectionLost))
+    
+            mylogs.info("-- HTTP --                  ")
+            mylogs.info("http_schedule_time:         " + str(self.http_schedule_time))
+            mylogs.info("http_get_option:            " + str(self.http_get_option))
+            mylogs.info("http_ip_address:            " + self.http_ip_address)
+            mylogs.info("http_ip_port:               " + self.http_ip_port)
+            mylogs.info("http_user:                  " + self.http_user)
+            mylogs.info("http_pass:                  " + self.http_pass)
+            mylogs.info("http_emlog_meterindex:      " + self.http_emlog_meterindex)
+            mylogs.info("http_vzl_UUID:              " + self.http_vzl_UUID)
+            mylogs.info("http_iobrogerobject:        " + self.http_iobrogerobject)
+            
+            mylogs.info("-- Meanwell --              ")
+            mylogs.info("USEDID:                     " + str(self.USEDID))
+            mylogs.info("MW_EEPROM_COUNTER:          " + str(self.MW_EEPROM_COUNTER))
+    
+            mylogs.info("-- Lumentree --             ")
+            mylogs.info("Lumentree efficacy_factor   " + str(self.lt_efficacy_factor))
+            mylogs.info("Lumentree Count             " + str(self.lt_count))
+            mylogs.info("Lumentree device  1         " + self.lt1_device)
+            mylogs.info("Lumentree address 1         " + str(self.lt1_address))
+            mylogs.info("Lumentree device  2         " + self.lt2_device)
+            mylogs.info("Lumentree address 2         " + str(self.lt2_address))
+            mylogs.info("Lumentree device  3         " + self.lt3_device)
+            mylogs.info("Lumentree address 3         " + str(self.lt3_address))
+            
+            mylogs.info("-- MQTT --                  ")
+            mylogs.info("mqttserver:                 " + self.mqttserver)
+            mylogs.info("mqttport:                   " + str(self.mqttport))
+            mylogs.info("mqttuser:                   " + self.mqttuser)
+            mylogs.info("mqttpass:                   " + self.mqttpass)
+            mylogs.info("mqttsubscribe:              " + str(self.mqttsubscribe))
+            mylogs.info("mqttpublish:                " + str(self.mqttpublish))
+            mylogs.info("mqttpublishWATT:            " + str(self.mqttpublishWATT))
+            mylogs.info("mqttpublishSOC:             " + str(self.mqttpublishSOC))
+            mylogs.info("mqttpublishBatVolt:         " + str(self.mqttpublishBatVolt))
+    
+            mylogs.info("-- BMS --                   ")
+            mylogs.info("Selected_BMS:               " + str(self.Selected_BMS))
+            mylogs.info("bms_device:                 " + str(self.bms_device))
+            mylogs.info("BMSminSOC:                  " + str(self.BMSminSOC))
+            mylogs.info("BMSRestartSOC:              " + str(self.BMSRestartSOC))
+    
+            mylogs.info("-- LCD --                   ")
+            mylogs.info("Selected_LCD:               " + str(self.Selected_LCD))
+            mylogs.info("lcdi2cadr:                  " + str(self.lcdi2cadr))
+    
+            mylogs.info("-- Battery parameter --     ")
+            mylogs.info("CellCount:                  " + str(self.CellCount))
+            mylogs.info("CellvoltageMax:             " + str(self.CellvoltageMax))
+            mylogs.info("CellvoltageMin:             " + str(self.CellvoltageMin))
+            mylogs.info("CellvoltageMaxRestart:      " + str(self.CellvoltageMaxRestart))
+            mylogs.info("CellvoltageMinRestart:      " + str(self.CellvoltageMinRestart))
+    
+            mylogs.info("FixedChargeVoltage:         " + str(self.FixedChargeVoltage))
+            mylogs.info("RestartChargevoltage:       " + str(self.RestartChargevoltage))
+            mylogs.info("StopMinChargeCurrent:       " + str(self.StopMinChargeCurrent))
+    
+            mylogs.info("StopDischargeVoltage:       " + str(self.StopDischargeVoltage))
+            mylogs.info("RestartDisChargevoltage:    " + str(self.RestartDisChargevoltage))
+    
+            mylogs.info("BatteryVoltageSource:       " + str(self.BatteryVoltageSource))
+            mylogs.info("BatteryVoltageCorrection:   " + str(self.BatteryVoltageCorrection))
+    
+            mylogs.info("-- WebServer Config --      ")
+            mylogs.info("Use_WebServer:              " + str(self.Use_WebServer))
+            mylogs.info("WSport:                     " + str(self.WSport))
+            mylogs.info("WSipadr:                    " + self.WSipadr)
+    
+            mylogs.info("Read config done ...")
 
-        mylogs.info("-- BMS --                   ")
-        mylogs.info("Selected_BMS:               " + str(self.Selected_BMS))
-        mylogs.info("bms_device:                 " + str(self.bms_device))
-        mylogs.info("BMSminSOC:                  " + str(self.BMSminSOC))
-        mylogs.info("BMSRestartSOC:              " + str(self.BMSRestartSOC))
-
-        mylogs.info("-- LCD --                   ")
-        mylogs.info("Selected_LCD:               " + str(self.Selected_LCD))
-        mylogs.info("lcdi2cadr:                  " + str(self.lcdi2cadr))
-
-        mylogs.info("-- Battery parameter --     ")
-        mylogs.info("CellCount:                  " + str(self.CellCount))
-        mylogs.info("CellvoltageMax:             " + str(self.CellvoltageMax))
-        mylogs.info("CellvoltageMin:             " + str(self.CellvoltageMin))
-        mylogs.info("CellvoltageMaxRestart:      " + str(self.CellvoltageMaxRestart))
-        mylogs.info("CellvoltageMinRestart:      " + str(self.CellvoltageMinRestart))
-
-        mylogs.info("FixedChargeVoltage:         " + str(self.FixedChargeVoltage))
-        mylogs.info("RestartChargevoltage:       " + str(self.RestartChargevoltage))
-        mylogs.info("StopMinChargeCurrent:       " + str(self.StopMinChargeCurrent))
-
-        mylogs.info("StopDischargeVoltage:       " + str(self.StopDischargeVoltage))
-        mylogs.info("RestartDisChargevoltage:    " + str(self.RestartDisChargevoltage))
-
-        mylogs.info("BatteryVoltageSource:       " + str(self.BatteryVoltageSource))
-        mylogs.info("BatteryVoltageCorrection:   " + str(self.BatteryVoltageCorrection))
-
-        mylogs.info("-- WebServer Config --      ")
-        mylogs.info("Use_WebServer:              " + str(self.Use_WebServer))
-        mylogs.info("WSport:                     " + str(self.WSport))
-        mylogs.info("WSipadr:                    " + self.WSipadr)
-
-        mylogs.info("Read config done ...")
+        except Exception as e:
+            mylogs.error("EXCEPTION READING CONFIG FILE")
+            mylogs.error(str(e))
+            sys.exit(1)
 
         return    
 
@@ -523,6 +569,7 @@ class chargerconfig:
         updater.read(status.configfile)
 
         updater["Setup"]["MW_EEPROM_COUNTER"].value = str(cfg.MW_EEPROM_COUNTER)
+        updater["Setup"]["EstBatteryWh"].value      = str(cfg.EstBatteryWh)
         updater.update_file()
         return
 
@@ -540,45 +587,55 @@ def runWS(server_class=HTTPServer, handler_class=WS, addr="localhost", port=9000
     httpd.serve_forever()
     return
 
+
 def on_exit():
-    mylogs.info("CLEAN UP ...")
-    if (cfg.GetPowerOption==0):
-        mylogs.info("CLEAN UP: Shutdown MQTT")
-        if ("mqttclient" in globals()):
-            mqttclient.on_message = "" #prevent any further message to be proceed
-            mqttpublish(1)
-            mylogs.info("CLEAN UP: mqtt unsubcribe: " + cfg.mqttsubscribe)
-            mqttclient.unsubscribe(cfg.mqttsubscribe)
-            mqttclient.unsubscribe(cfg.mqttsubscribe)
-            mqttclient.disconnect()
-            mqttclient.loop_stop()
-
-    sleep(0.5) # wait to be sure that mqtt is really down and no new message will be proceed !
-    StartStopOperationCharger(0,1)
-    StartStopOperationDisCharger(0,1)
-    #CAN close 0=bic2200, 1=NPB
-    if (cfg.Selected_Device_Charger <=1):
-        mylogs.info("CLEAN UP: Shutdown MEANWELL DEVICE")
-        mylogs.info("Close CAN device")
-        candev.can_down()
-        mylogs.info("MEANWELL EEPROM COUNTER: " + str(cfg.MW_EEPROM_COUNTER))
-        cfg.iniwrite()
+    try:
+        mylogs.info("CLEAN UP ...")
+        if (cfg.GetPowerOption==0):
+            mylogs.info("CLEAN UP: Shutdown MQTT")
+            if ("mqttclient" in globals()):
+                mqttclient.on_message = "" #prevent any further message to be proceed
+                mqttpublish(1)
+                mylogs.info("CLEAN UP: mqtt unsubcribe: " + cfg.mqttsubscribe)
+                mqttclient.unsubscribe(cfg.mqttsubscribe)
+                mqttclient.unsubscribe(cfg.mqttsubscribe)
+                mqttclient.disconnect()
+                mqttclient.loop_stop()
     
-    if (cfg.Selected_Device_DisCharger == 1): #Lumentree
-        mylogs.info("CLEAN UP: Shutdown LUMENTREE DEVICE(s)")
-        LT1.lt232_close()
-        if(cfg.lt_count > 1): LT2.lt232_close()
-        if(cfg.lt_count > 2): LT3.lt232_close()
-
-    if (cfg.Selected_BMS == 2):
-        mylogs.info("CLEAN UP: Shutdown JKBMS")
-        jk.jkbms_close()
-
-    if (cfg.Selected_LCD == 1):
-        printlcd(line1="SCRIPT STOP", line2="REASON UNKNOWN")
-        #display.lcd_clear()
-        mylogs.info("CLEAN UP: Shutdown LCD/OLED")
+        sleep(0.5) # wait to be sure that mqtt is really down and no new message will be proceed !
+        StartStopOperationCharger(0,1)
+        StartStopOperationDisCharger(0,1)
+        #CAN close 0=bic2200, 1=NPB
+        if (cfg.Selected_Device_Charger <=1):
+            mylogs.info("CLEAN UP: Shutdown MEANWELL DEVICE")
+            mylogs.info("Close CAN device")
+            mwcandev.can_down()
+            mylogs.info("MEANWELL EEPROM COUNTER: " + str(cfg.MW_EEPROM_COUNTER))
+    #        cfg.iniwrite()
         
+        if (cfg.Selected_Device_DisCharger == 1): #Lumentree
+            mylogs.info("CLEAN UP: Shutdown LUMENTREE DEVICE(s)")
+            LT1.lt232_close()
+            if(cfg.lt_count > 1): LT2.lt232_close()
+            if(cfg.lt_count > 2): LT3.lt232_close()
+    
+        if (cfg.Selected_BMS == 2):
+            mylogs.info("CLEAN UP: Shutdown JKBMS")
+            jk.jkbms_close()
+    
+        if (cfg.Selected_LCD == 1):
+            printlcd(line1="SCRIPT STOP", line2="REASON UNKNOWN")
+            #display.lcd_clear()
+            mylogs.info("CLEAN UP: Shutdown LCD/OLED")
+
+        cfg.EstBatteryWh = round(status.EstBatteryWh)
+        cfg.iniwrite()
+        
+    except Exception as e:
+            mylogs.error("ON EXIT EXCEPTION !")
+            mylogs.error(str(e))
+            cfg.iniwrite()
+
     
 def handle_exit(signum, frame):
     mylogs.info("SIGNAL TO STOP RECEIVED")
@@ -603,7 +660,7 @@ def CheckPatameter():
         mylogs.error("\n\nNO VOLTAGE SOURCE DEFINED!\n")
         return 0
 
-    if((cfg.ForceBicAlwaysOn == 1) and ((cfg.Selected_Device_Charger + Selected_Device_DisCharger) != 0)):
+    if((cfg.ForceBicAlwaysOn == 1) and ((cfg.Selected_Device_Charger + cfg.Selected_Device_DisCharger) != 0)):
         mylogs.error("\n\nYOU CAN ONLY USE ForceBicAlwaysOn WITH BIC2200 AS CHARGER AND DISCHARGER !\n")
         return 0
 
@@ -624,7 +681,7 @@ def gpio_callback(channel):
         if (channel == cfg.gpio1):
             mylogs.info("GPIO CALLBACK 1 - Dis/Enable DisCharger")
             #If you use this, the Lumentree must be the DisCharger or lt_foreceoffonstartup must be enabled
-            #Set_LT_Inverter(0,1)
+            #DisCharger_Lumentree_Set(0,1)
             if(status.DisChargerEnabled==1):
                 status.DisChargerEnabled = 0
             else:
@@ -648,7 +705,7 @@ def gpio_callback(channel):
 # Main Status
 #####################################################################
 def logstatus():
-        mylogs.info("-> STATUS:  C:" + str(status.ChargerEnabled) + "  D:" + str(status.DisChargerEnabled) + " | SOC:" + str(status.BMSSOC) + "%  BattV:" + str(status.BatteryVoltage/100) + "V |  Total: " + str(status.CurrentTotalWatt) + "W  Meter:" + str(status.CurrentWattValue) + "W  Average: " + str(status.CurrentAverageWatt) + "W  LastO:" + str(status.LastWattValueUsedinDevice) + "W")
+        mylogs.info("-> STATUS:  C:" + str(status.ChargerEnabled) + "  D:" + str(status.DisChargerEnabled) + " | SOC:" + str(status.BMSSOC) + "%  BattV:" + str(status.BatteryVoltage/100) + "V |  Total: " + str(status.CurrentTotalWatt) + "W  Meter:" + str(status.CurrentWattValue) + "W  Average: " + str(status.CurrentAverageWatt) + "W  LOUT:" + str(status.LastWattValueUsedinDevice) + "W - RCAP: " + str(round(status.EstBatteryWh/1000)) )
 
 #####################################################################
 # LCD routine
@@ -760,7 +817,7 @@ def bms_read():
 #####################################################################
 #Setup Operation mode of charger
 def StartStopOperationCharger(val,force=0):
-    mylogs.debug("StartStopOperationCharger: " + str(val))
+    mylogs.verbose("StartStopOperationCharger: " + str(val) + " Force: " + str(force))
     
     if (status.ChargerEnabled == 0):
         val = 0
@@ -771,28 +828,29 @@ def StartStopOperationCharger(val,force=0):
          status.BatteryFULL = 0
 
     #Battery is full, stop charing and wait for discharge
-    if((status.LastChargerGetCurrent != 0) and (status.LastChargerGetCurrent <= cfg.StopMinChargeCurrent)):
+    if((status.ChargerStatus  == 1)  and (status.LastChargerGetCurrent <= cfg.StopMinChargeCurrent)): # and (status.LastChargerGetCurrent != 0)):
         status.BatteryFULL = 1
+        force = 1 #force stop charging 
 
     if(status.BatteryFULL == 1):
-        mylogs.info("StartStopOperationCharger: Battery Full ! - Charging current too small: " + str(status.LastChargerGetCurrent/100))
+        mylogs.info("StartStopOperationCharger: Battery Full ! - Charging current too small: " + str(status.LastChargerGetCurrent) + " - Min: " + str(cfg.StopMinChargeCurrent))
         val = 0
     
     if (force==0): #if force = 1, proceeed without any logic 
         if (status.ChargerStatus == 0) and (val == 0): 
-            mylogs.debug("StartStopOperationCharger already off mode")
+            mylogs.verbose("StartStopOperationCharger already off mode")
             return #DisCharger already off, can stop here
     
         #Check if we need to set the new value to the Charger
         p = abs(status.LastWattValueUsedinDevice - val)
     
-        if (p <= cfg.LastChargePower_delta):
-            mylogs.info("No change to Charger output, Delta is: " + str(p) + "  - Set to :" + str(cfg.LastChargePower_delta))
+        if ((val != 0) and (p <= cfg.LastChargePower_delta)):
+            mylogs.verbose("No change to Charger output, Delta is: " + str(p) + "  - Set to :" + str(cfg.LastChargePower_delta))
             return
 
     if (cfg.Selected_Device_Charger <= 1): #BIC and NPB-abc0
         #try to set the new ChargeCurrent if possible
-        MeanwellChargerSet(val,force)
+        Charger_Meanwell_Set(val,force)
         return
     
     if (cfg.Selected_Device_Charger == 255):     #Simulator
@@ -806,10 +864,10 @@ def StartStopOperationCharger(val,force=0):
 
 
 def StartStopOperationDisCharger(val,force=0):
-    mylogs.debug("StartStopOperationDisCharger: " + str(val))
+    mylogs.verbose("StartStopOperationDisCharger: " + str(val) + " Force: " + str(force))
     
     if (status.DisChargerEnabled == 0):
-        mylogs.info("StartStopOperationDisCharger: DisCharger disabled !")
+        mylogs.verbose("StartStopOperationDisCharger: DisCharger disabled !")
         val = 0
 
     #if the Battery is not totally empty anymore, start Discharging
@@ -817,9 +875,11 @@ def StartStopOperationDisCharger(val,force=0):
         mylogs.info("StartStopOperationDisCharger: Battery Discharging allowed again. Current Volatge: " + str(status.BatteryVoltage/100) + " (Restart Voltage: " + str(cfg.RestartDisChargevoltage/100) + ")")
         status.BatteryEMPTY = 0
 
-    #Battery is full, stop charing and wait for discharge
-    if(status.BatteryVoltage <= cfg.StopDischargeVoltage):
+    #Battery is empty, stop Discharing and wait for charging
+    if((status.BatteryVoltage > 0) and (status.BatteryVoltage <= cfg.StopDischargeVoltage)):
         status.BatteryEMPTY = 1
+        #Set EstBatteryWh to 0, because for this schript the Battery is empty 
+        cfg.EstBatteryWh    = 0
 
     if(status.BatteryEMPTY == 1):
         mylogs.info("StartStopOperationDisCharger: Battery EMPTY ! Battery Voltage: " + str(status.BatteryVoltage/100) + ' - SOC: ' + str(status.BMSSOC))
@@ -829,10 +889,10 @@ def StartStopOperationDisCharger(val,force=0):
         # Do not discharge any further if SOC is lower than specified
         if ((status.BMSSOC <= cfg.BMSminSOC) or (status.BatteryVoltage <= cfg.StopDischargeVoltage)):
             val = 0 
-            mylogs.info("StartStopOperationDisCharger: SOC too low: " + str(status.BMSSOC) + "% ->  SET VALUE TO: " + str(val))
+            mylogs.info("StartStopOperationDisCharger: SOC or Voltage too low: " + str(status.BMSSOC) + "% or " + str(status.BatteryVoltage) + "V ->  SET VALUE TO: " + str(val))
 
         if(status.DisChargerStatus == 0) and (val == 0): 
-            mylogs.debug("StartStopOperationDisCharger: Already off mode")
+            mylogs.verbose("StartStopOperationDisCharger: Already off mode")
             return #DisCharger already off, can stop here
         
 
@@ -855,11 +915,11 @@ def StartStopOperationDisCharger(val,force=0):
     #Which Device used
     mylogs.debug("StartStopOperationDisCharger: " + str(Newval))
     if (cfg.Selected_Device_DisCharger == 0): #Meanwell BIC-2200
-        BICDisChargerSet(Newval,force)
+        DisCharger_BIC2200_Set(Newval,force)
         return     
 
     if (cfg.Selected_Device_DisCharger == 1): #Lumentree
-        Set_LT_Inverter(Newval,force)    
+        DisCharger_Lumentree_Set(Newval,force)    
         return     
     
     if (cfg.Selected_Device_DisCharger == 255): #Simulator
@@ -874,33 +934,34 @@ def StartStopOperationDisCharger(val,force=0):
 #####################################################################
 # Operation Meanwell
 def StartStopOperationMeanwell(val, force=0):
-    mylogs.debug("StartStopOperationMeanwell value: " + str(val))
+    mylogs.verbose("StartStopOperationMeanwell value: " + str(val) + " Force: " + str(force))
     #read current status from device
     
     if((cfg.Selected_Device_Charger == 0) and (cfg.ForceBicAlwaysOn) and (force==0)):
         return 1
     
-    opmode = candev.operation(0,0)
+    opmode = mwcandev.operation(0,0)
+    mylogs.debug("Meanwell: Operation mode: " + str(opmode))
     if (val == 0): #set to off  
         if((opmode != 0) or (force==1)):
-            candev.operation(1,0)
-            mylogs.debug("Meanwell: Operation mode set to: OFF")
+            mwcandev.operation(1,0)
+            mylogs.verbose("Meanwell: Operation mode set to: OFF")
             cfg.MW_EEPROM_COUNTER += 1
         else:
-            mylogs.debug("Meanwell: Operation mode already OFF")
+            mylogs.verbose("Meanwell: Operation mode already OFF")
     else:
         if((opmode != 1) or (force==1)):
-            candev.operation(1,1)   
-            mylogs.debug("Meanwell: Operation mode set to: ON")
+            mwcandev.operation(1,1)   
+            mylogs.verbose("Meanwell: Operation mode set to: ON")
             cfg.MW_EEPROM_COUNTER += 1
         else:
-            mylogs.debug("Meanwell: Operation mode already ON")
+            mylogs.verbose("Meanwell: Operation mode already ON")
 
 
 
 #    if (val == 0):  
 #        if (status.ChargerStatus != 0):
-#            candev.operation(1,0)
+#            mwcandev.operation(1,0)
 #            status.ChargerStatus = 0
 #            status.ZeroImportWatt = 0   
 #            mylogs.debug("Meanwell: Operation mode set to: OFF")
@@ -909,7 +970,7 @@ def StartStopOperationMeanwell(val, force=0):
 #            mylogs.debug("Meanwell: Operation mode already OFF")
 #    else:
 #        if (status.ChargerStatus != 1):
-#            candev.operation(1,1)   
+#            mwcandev.operation(1,1)   
 #            status.ChargerStatus = 1   
 #            mylogs.debug("Meanwell: Operation mode set to: ON")
 #            cfg.MW_EEPROM_COUNTER += 1
@@ -919,16 +980,18 @@ def StartStopOperationMeanwell(val, force=0):
     return val
 
 
-def BICDisChargerSet(val,force=0):
+def DisCharger_BIC2200_Set(val,force=0):
+    mylogs.verbose("DisCharger_BIC2200_Set value: " + str(val) + " Force: " + str(force))
 
-    if(cfg.BICChargeDisChargeMode==0):
+    status.BICChargeDisChargeMode = mwcandev.BIC_chargemode(0,0)
+    if(status.BICChargeDisChargeMode==0):
         mylogs.info("StartStopOperationDisCharger: Set BIC2200 to DisCharge Mode")
-        candev.BIC_chargemode(1)  #set BIC to DisChargemode
-        BICChargeDisChargeMode=1
+        mwcandev.BIC_chargemode(1,1)  #set BIC to DisChargemode
         cfg.MW_EEPROM_COUNTER += 1
+#        status.BICChargeDisChargeMode=1
 
     #read voltage from BIC device
-    vout  = candev.v_out_read()
+    vout  = mwcandev.v_out_read()
     
     #Calculate current for meanwell + or - to the actual power from PV / Grid
     #*-10000 --> Vout and iout value is *100 --> 2x100 = 10000
@@ -962,38 +1025,51 @@ def BICDisChargerSet(val,force=0):
     if (IntCurrent != status.LastDisChargerCurrent):
         if (status.actchargercounter >= cfg.MeterUpdateCounter):
             mylogs.info("Meanwell BIC: Set new current to: " + str(IntCurrent) + "  (Last current: " + str(status.LastDisChargerCurrent) + ")")
-            c = candev.BIC_discharge_i(1,IntCurrent)
+            c = mwcandev.BIC_discharge_i(1,IntCurrent)
             status.LastDisChargerCurrent = IntCurrent;
             cfg.MW_EEPROM_COUNTER += 1
         else:
-            mylogs.info("Meanwell BIC: Wait for next change: " + str(status.actchargercounter) + "  of: " + str(cfg.MeterUpdateCounter))
+            mylogs.verbose("Meanwell BIC: Wait for next change: " + str(status.actchargercounter) + "  of: " + str(cfg.MeterUpdateCounter))
             status.actchargercounter += 1
     else:
         mylogs.info("Meanwell BIC: No New current to set. Last current: " + str(status.LastDisChargerCurrent))
         
     
-    sleep(0.1)
-    iout  = candev.i_out_read()
+    #try to set the new ChargeCurrent if possible
+    if (OPStart == True): #if true start mw device 
+        mylogs.verbose("OPSTART TRUE : Start Meanwell Device")
+        status.DisChargerStatus  = 1
+        StartStopOperationMeanwell(1,force)
+    else: 
+        mylogs.verbose("OPSTART FALSE: Stop Meanwell Device")
+        status.DisChargerStatus  = 0
+#        status.ZeroExportWatt = 0
+        StartStopOperationMeanwell(0,force)     
+
+    sleep(0.3)
+    iout  = mwcandev.i_out_read()
     NewVal = int((iout*vout)/10000)
 
     mylogs.info("Meanwell BIC: W Battery_Vout:" + str(vout/100) + ":V: Battery_I_out:" + str(iout/100) + ":A: I Calc:" + str(IntCurrent) + " = " + str(IntCurrent/100) + ":A --> WATT: " + str(NewVal))
 
     status.LastWattValueUsedinDevice = NewVal
-    return OPStart
+    return
 
 
-def MeanwellChargerSet(val,force=0):
+def Charger_Meanwell_Set(val,force=0):
+    mylogs.verbose("Charger_Meanwell_Set value: " + str(val) + " Force: " + str(force))
 
     #For BIC set Charge mode first
     if cfg.Selected_Device_Charger == 0: #BIC2200
-        if(cfg.BICChargeDisChargeMode==1):
+        status.BICChargeDisChargeMode = mwcandev.BIC_chargemode(0,0)
+        if(status.BICChargeDisChargeMode==1):
             mylogs.info("StartStopOperationCharger: Set BIC2200 to Charge Mode")
-            candev.BIC_chargemode(0)  #set BIC to Chargemode
-            BICChargeDisChargeMode=0
+            mwcandev.BIC_chargemode(1,0)  #set BIC to Chargemode
             cfg.MW_EEPROM_COUNTER += 1
+#            cfg.BICChargeDisChargeMode=0
 
     #read voltage and current from NBB device
-    vout  = candev.v_out_read()
+    vout  = mwcandev.v_out_read()
     status.ChargerVoltage = vout 
     
     #Calculate current for meanwell + or - to the actual power from PV / Grid
@@ -1023,28 +1099,30 @@ def MeanwellChargerSet(val,force=0):
             mylogs.info("Meanwell: ZeroImportWatt used - allow from GRID: " + str(status.ZeroImportWatt))
 
     if (IntCurrent != status.LastChargerSetCurrent):
-        if (status.actchargercounter >= cfg.MeterUpdateCounter):
+        if ((status.actchargercounter >= cfg.MeterUpdateCounter) or (force == 1)):
             mylogs.info("Meanwell: >>>> Set new current to: " + str(IntCurrent) + "  (Last current set: " + str(status.LastChargerSetCurrent) + ") <<<<")
             
             if(IntCurrent == 0):
                 #Probably no need to set since device will be set to OFF mode
-                #c = candev.i_out_set(1,IntCurrent)
+                #c = mwcandev.i_out_set(1,IntCurrent)
                 #cfg.MW_EEPROM_COUNTER += 1
+                mylogs.info("Meanwell: IntCurrent = 0")
                 status.LastChargerSetCurrent = IntCurrent;
                 OPStart = False #device start
             else:
-                if((status.LastChargerGetCurrent < (status.LastChargerSetCurrent-100)) and (status.BMSSOC > 98)):
+                if((status.LastChargerGetCurrent < (status.LastChargerSetCurrent-50)) and (status.BMSSOC > 98)):
                     mylogs.info("Meanwell: >>>> NO SET -> BATTERY ALMOST FULL: " + str(IntCurrent) + " (Last current GET: " + str(status.LastChargerGetCurrent)  + "  (Last current SET: " + str(status.LastChargerSetCurrent) + ") <<<<")
                     OPStart = True #device start or continue
                 else:
-                    c = candev.i_out_set(1,IntCurrent)
+                    mylogs.info("Meanwell: SET NEW CURRENT TO: " + str(IntCurrent))
+                    c = mwcandev.i_out_set(1,IntCurrent)
                     status.LastChargerSetCurrent = IntCurrent;
                     cfg.MW_EEPROM_COUNTER += 1
                     OPStart = True #device start or continue
                     
             status.actchargercounter = 1 #Reset counter to 1 
         else:
-            mylogs.info("Meanwell: Wait for next change: " + str(status.actchargercounter) + "  of: " + str(cfg.MeterUpdateCounter))
+            mylogs.verbose("Meanwell: Wait for next change: " + str(status.actchargercounter) + "  of: " + str(cfg.MeterUpdateCounter))
             status.actchargercounter += 1
             if(status.ChargerStatus == 0):#do not change the current status
                 OPStart = False
@@ -1063,22 +1141,25 @@ def MeanwellChargerSet(val,force=0):
 #        status.ZeroImportWatt = 0
        
 
-    sleep(0.3)
-    status.LastChargerGetCurrent  = candev.i_out_read()
-    NewVal = int((status.LastChargerGetCurrent*vout)/10000)
-    mylogs.info("Meanwell: Battery_Vout:" + str(vout/100) + ":V: I_out:" + str(status.LastChargerGetCurrent/100) + ":A: I Calc:" + str(IntCurrent/100) + ":A - GET ACT: " + str(NewVal) + "W")
-    status.LastWattValueUsedinDevice = NewVal*(-1)
 
     #try to set the new ChargeCurrent if possible
     if (OPStart == True): #if true start mw device 
-        mylogs.debug("Start Meanwell Device")
+        mylogs.verbose("OPSTART TRUE : Start Meanwell Device")
         status.ChargerStatus  = 1
         StartStopOperationMeanwell(1,force)
     else: 
-        mylogs.debug("Stop Meanwell Device")
+        mylogs.verbose("OPSTART FALSE: Stop Meanwell Device")
         status.ChargerStatus  = 0
         status.ZeroImportWatt = 0
         StartStopOperationMeanwell(0,force)     
+
+    #wait to read the current after MW starts to get a value != 0
+    #if 0 returns Battery is full, checked in StartStopCharger
+    sleep(0.3)
+    status.LastChargerGetCurrent  = mwcandev.i_out_read()
+    NewVal = int((status.LastChargerGetCurrent*vout)/10000)
+    mylogs.info("Meanwell: Battery_Vout:" + str(vout/100) + ":V: I_out:" + str(status.LastChargerGetCurrent/100) + ":A: I Calc:" + str(IntCurrent/100) + ":A - GET ACT: " + str(NewVal) + "W")
+    status.LastWattValueUsedinDevice = NewVal*(-1)
 
     return OPStart
 
@@ -1088,8 +1169,8 @@ def MeanwellChargerSet(val,force=0):
 #####################################################################
 #####################################################################
 # Operation Lumentree reopen if Device has communication errors
-def ReOpen_LT():
-    mylogs.warning("ReOpen Lumentree !")
+def Lumentree_ReOpen():
+    mylogs.warning("Lumentree_ReOpen !")
     
     try:
         LT1.lt232_close()
@@ -1108,10 +1189,10 @@ def ReOpen_LT():
 
 #####################################################################
 # Check periodically if Lumentree is still online. If not try to reopen
-def LT_Check():
+def Lumentree_Check():
     if (cfg.Selected_Device_DisCharger != 1): return
 
-    mylogs.debug("------> Lumentree Check Alive ...")
+    mylogs.verbose("------> Lumentree Check Alive ...")
     try:
         status.DisChargerVoltage = LT1.readDCvoltage() * 10 #return 3 digits, need 4 for compare --> *10
 #        sleep(0.1)
@@ -1129,8 +1210,8 @@ def LT_Check():
 
 #####################################################################
 # Operation Lumentree Sun600/1000/2000
-def Set_LT_Inverter(val,force=0):
-    mylogs.debug("Set_LT_Inverter to value: " + str(val))
+def DisCharger_Lumentree_Set(val,force=0):
+    mylogs.verbose("DisCharger_Lumentree_Set to value: " + str(val))
 
     if (cfg.MaxDisChargeWATT <= val):
         outpower = cfg.MaxDisChargeWATT
@@ -1145,10 +1226,10 @@ def Set_LT_Inverter(val,force=0):
     if (force==0):
         p = abs(status.LastWattValueUsedinDevice - outpower)
         if(p <= 8): #since Lumentree don't have exact value we can set, use +/-8 to test if we have the same value
-            mylogs.debug("Set_LT_Inverter: No change to DISCharger output: " + str(status.LastWattValueUsedinDevice) + " NewWatt Value: " + str(outpower))
+            mylogs.verbose("DisCharger_Lumentree_Set: No change to DISCharger output: " + str(status.LastWattValueUsedinDevice) + " NewWatt Value: " + str(outpower))
             return 0     #no need to set the same again, mainly for max power, delta is handled above
         else:
-            mylogs.debug("Set_LT_Inverter LastWATT value: " + str(status.LastWattValueUsedinDevice) + " NewWatt Value: " + str(outpower))
+            mylogs.verbose("DisCharger_Lumentree_Set: LastWATT value: " + str(status.LastWattValueUsedinDevice) + " NewWatt Value: " + str(outpower))
     
         #only needs to read one LT for DC voltage, all should be connected to the same battery
         try:
@@ -1161,7 +1242,7 @@ def Set_LT_Inverter(val,force=0):
         if (DCvoltage < 10): 
             if (status.DisChargerStatus == 0):
                 #only if DisCarger is set already to OFF, otherwise proceed to power off
-                mylogs.info("LT_Inverter DC volatge too low. Probably Battery empty : " + str(DCvoltage))
+                mylogs.info("DisCharger_Lumentree_Set: DC volatge too low. Probably Battery empty : " + str(DCvoltage))
                 return
             else:
                 #Disable DisCharger
@@ -1189,27 +1270,27 @@ def Set_LT_Inverter(val,force=0):
         outpower3 = cfg.lt3_maxwatt
     outpower  = outpower - outpower3
     
-    mylogs.info("SET_LT_Inverter : Outpower set to LT1: " + str(outpower1) + "   LT2: " + str(outpower2) + "   LT3: " + str(outpower3))
+    mylogs.info("DisCharger_Lumentree_Set : Outpower set to LT1: " + str(outpower1) + "   LT2: " + str(outpower2) + "   LT3: " + str(outpower3))
     if (outpower != 0):
-        mylogs.info("SET_LT_Inverter : Outpower should be 0 now - check settings ! - " + str(outpower))
+        mylogs.info("DisCharger_Lumentree_Set : Outpower should be 0 now - check settings ! - " + str(outpower))
         
     try:
         #Lumentree Inverter 1
-        mylogs.debug("Set_LT_Inverter   (1) : " + str(outpower1))
+        mylogs.verbose("DisCharger_Lumentree_Set   (1) : " + str(outpower1))
         LT1.set_watt_out(outpower1);
         sleep(0.2)  #wait 0.2 seconds to read next value
         status.LastWattValueUsedinDevice = LT1.read_watt_out()
     
         #Lumentree Inverter 2
         if (cfg.lt_count > 1):
-            mylogs.debug("Set_LT_Inverter   (2) : " + str(outpower2))
+            mylogs.verbose("DisCharger_Lumentree_Set   (2) : " + str(outpower2))
             LT2.set_watt_out(outpower2);
             sleep(0.2)  #wait 0.2 seconds to read next value
             status.LastWattValueUsedinDevice = status.LastWattValueUsedinDevice + LT2.read_watt_out()
             
         #Lumentree Inverter 3
         if (cfg.lt_count > 2):
-            mylogs.debug("Set_LT_Inverter   (3) : " + str(outpower3))
+            mylogs.verbose("DisCharger_Lumentree_Set   (3) : " + str(outpower3))
             LT3.set_watt_out(outpower3);
             sleep(0.2)  #wait 0.2 seconds to read next value
             status.LastWattValueUsedinDevice = status.LastWattValueUsedinDevice + LT3.read_watt_out()
@@ -1230,16 +1311,17 @@ def Set_LT_Inverter(val,force=0):
         mylogs.error(str(e))
         status.LastWattValueUsedinDevice = 10 #force to go here
         status.DisChargerStatus = 1           #prevent not setting off, if LT is back again 
-        ReOpen_LT()
+        Lumentree_ReOpen()
 
-    mylogs.info("Read_LT_Inverter Total: " + str(status.LastWattValueUsedinDevice))
+    mylogs.info("DisCharger_Lumentree_Set read Total: " + str(status.LastWattValueUsedinDevice))
     return 
     
     
 def GetChargerVoltage():
+    mylogs.debug("GetChargerVoltage ...")
     try:
         if (cfg.Selected_Device_Charger <= 1): #BIC and NPB-abc0
-            status.ChargerVoltage = candev.v_out_read()
+            status.ChargerVoltage = mwcandev.v_out_read()
 
     except:
         mylogs.error("GetChargerVoltage EXEPTION !")
@@ -1248,13 +1330,14 @@ def GetChargerVoltage():
 
 
 def GetDisChargerVoltage():
+    mylogs.debug("GetDisChargerVoltage ...")
     try:
         if (cfg.Selected_DisDevice_Charger == 0): #BIC2200
-            status.DisChargerVoltage = candev.v_out_read()
+            status.DisChargerVoltage = mwcandev.v_out_read()
             
         if (cfg.Selected_DisDevice_Charger == 1): #Lumentree
             #status.DisChargerVoltage = LT1.readDCvoltage() * 10 #return 3 digits, need 4 for compare --> *10
-            mylogs.info("GetDisChargerVoltage: Nothing to do here, this is already done in LT_Check !")
+            mylogs.info("GetDisChargerVoltage: Nothing to do here, this is already done in Lumentree_Check !")
 
     except:
         mylogs.error("GetDisChargerVoltage EXEPTION !")
@@ -1263,6 +1346,7 @@ def GetDisChargerVoltage():
 
 
 def GetBatteryVoltage():
+    mylogs.debug("GetBatteryVoltage ...")
     try:
         if(cfg.BatteryVoltageSource == 0):
             status.BatteryVoltage = cfg.FixedChargeVoltage #do not use it, assume always full
@@ -1287,16 +1371,34 @@ def GetBatteryVoltage():
     
     return
 
+def CalcBatteryWh():
+    mylogs.debug("CalcBatteryWh ...")
+
+    now  = datetime.datetime.now()
+    diff = (now - status.LastMeterTime).total_seconds()  
+    #get the millWattHour in seconds of the LastWattValueUsedinDevice
+    #-1000: we get negative value for charging, convert to positive values
+    #DisCharger_efficacy_factor needed because we need more current than we request WATT of the DisCharger
+    LastWatt_mWh = status.LastWattValueUsedinDevice * status.DisCharger_efficacy_factor * -1000 / 3600
+
+    #and multiply with the duration
+    Bat_mWh = LastWatt_mWh * diff 
+    status.EstBatteryWh = status.EstBatteryWh + Bat_mWh
+    status.LastMeterTime = now
+    mylogs.verbose("CalcBatteryWh: LastWatt_mWh :" + str(round(LastWatt_mWh,2)) + " - Bat_mAH: " + str(round(Bat_mWh,2)) + " - EF: " + str(status.DisCharger_efficacy_factor) + " - TimeDiff: " + str(round(diff,2)))
+
 #####################################################################
 #calculate the output power by array
 #####################################################################
 def getoutputpower(val):
+    mylogs.debug("getoutputpower ...")
+
     try:
         status.ProcessCount+=1
         if(status.ProcessCount > 20): #every 20 power value reads, if set to 2 seconds --> all 40 seconds 
             status.ProcessCount = 1
             bms_read()  #Read all data and set some status IDs
-            LT_Check()  #Check every minute if LT is online, and get CD Voltage, if not try to reconnect
+            Lumentree_Check()  #Check every minute if LT is online, and get CD Voltage, if not try to reconnect
             GetBatteryVoltage()
             
         #check the total Watt, 
@@ -1319,6 +1421,7 @@ def getoutputpower(val):
         mqttpublish()
         printlcd()
         logstatus()
+        CalcBatteryWh()
 
     except Exception as e:
         mylogs.error("GETOUTPUTPOWER EXEPTION !")
@@ -1335,13 +1438,13 @@ def process_power(power):
     
     OPStart = False #should the device do something
     curtime = datetime.datetime.now()
-    mylogs.debug("TotalWatt: " + str(power) + "W  -  CalcAverage: " + str(status.CurrentAverageWatt) + "W")
+    mylogs.verbose("TotalWatt: " + str(power) + "W  -  CalcAverage: " + str(status.CurrentAverageWatt) + "W")
 
 #######################################################################################################################################
 #######  Method 0 DEBUG ###############################################################################################################
 #######################################################################################################################################
     if (cfg.PowerControlmethod == 0):
-        mylogs.ERROR("PowerControlmethod: 0 - DO NOT USE - ONLY FOR DEBUG")
+        mylogs.error("PowerControlmethod: 0 - DO NOT USE - ONLY FOR DEBUG")
 
 #######################################################################################################################################
 #######  Method 1 Universal, Just check if positive or negative power #################################################################
@@ -1353,7 +1456,7 @@ def process_power(power):
             if((NewPower - status.ZeroImportWatt) > cfg.ZeroDeltaChargerWatt):
                 status.ZeroImportWatt = 0   #too much delta, reset and use normal way
             else:
-                mylogs.info("ChargeMethod: 1 with ZeroImport")
+                mylogs.verbose("ChargeMethod: 1 with ZeroImport")
                 StartStopOperationCharger(NewPower)
                 return power
         
@@ -1464,6 +1567,11 @@ def mqtt_on_subscribe(client, userdata, mid, granted_qos):
     return
     
 
+#add logger verbose
+def verbose(self, message, *args, **kwargs):
+    if self.isEnabledFor(logging.VERBOSE):
+        self._log(logging.VERBOSE, message, args, **kwargs)
+
 #######################################################################################################################################
 #######################################################################################################################################
 #                  *** Main ***                         ###############################################################################
@@ -1486,10 +1594,21 @@ status = Devicestatus();
 
 #################################################################
 #Get global cfg from file 
+
+# Define a custom logging method for the new level
+logging.VERBOSE = 15
+logging.addLevelName(logging.VERBOSE, 'VERBOSE')
+logging.Logger.verbose = verbose
+#Create a new logger mylogs
 mylogs  = logging.getLogger()
+
+#Read conf file
 spath   = os.path.dirname(os.path.realpath(sys.argv[0]))
 status.configfile = spath + "/BSsetup.conf"
 cfg     = chargerconfig()
+
+#put it into status class for easier status info for webserver
+status.EstBatteryWh = cfg.EstBatteryWh
 
 if (cfg.i_changed_my_config == 0):
     print("PLEASE SET UP YOUR DEVICE IN BSsetup.conf !!")
@@ -1531,12 +1650,12 @@ if (cfg.Selected_LCD != 0):
 #################################################################
 #CAN INIT for CAN device: 0=bic2200, 1=NPB
 if (cfg.Selected_Device_Charger <=1):
-    mylogs.debug("OPEN CAN DEVICE: MEANWELL")
-    candev = mwcan(cfg.Selected_Device_Charger,cfg.USEDID,"",cfg.loglevel)
+    mylogs.verbose("OPEN CAN DEVICE: MEANWELL")
+    mwcandev = mwcan(cfg.Selected_Device_Charger,cfg.USEDID,"",cfg.loglevel)
     
     #Init and get get Type of device
     try:
-        mwt = candev.can_up()
+        mwt = mwcandev.can_up()
         mylogs.info(mwt)
     except Exception as e:
         mylogs.error("\n\nMeanwell Device not found !\n")
@@ -1544,26 +1663,26 @@ if (cfg.Selected_Device_Charger <=1):
         printlcd("EXEPT Meanwell",str(e))
         sys.exit(1)
     
-    #print(candev.serial_read())
-    mylogs.info(mwt + " temperature: " + str(candev.temp_read()/10) + " C")
+    #print(mwcandev.serial_read())
+    mylogs.info(mwt + " temperature: " + str(mwcandev.temp_read()/10) + " C")
     
     #Set ChargerMainVoltage of the charger to check the parameters, needs to be in value *100, 24 = 2400
-    status.ChargerMainVoltage = candev.dev_Voltage * 100
+    status.ChargerMainVoltage = mwcandev.dev_Voltage * 100
     
     #get grid voltage from meanwell device
     Voltage_IN = 0
-    Voltage_IN = round(float(candev.v_in_read()/10)) 
+    Voltage_IN = round(float(mwcandev.v_in_read()/10)) 
     Voltage_IN = Voltage_IN + cfg.Voltage_ACIN_correction  
     mylogs.info("Grid Voltage: " + str(Voltage_IN) + " V")
     
     #Set main parameter and stop device
-    mylogs.debug("Operation STOP: " + str(candev.operation(1,0)))
+    mylogs.debug("Operation STOP: " + str(mwcandev.operation(1,0)))
     StartStopOperationCharger(0,1)
 
     #Set fixed charge voltage to device BIC and NPB
-    rval = candev.v_out_set(0,0)
+    rval = mwcandev.v_out_set(0,0)
     if(rval != cfg.FixedChargeVoltage):
-        rval = candev.v_out_set(1,cfg.FixedChargeVoltage)
+        rval = mwcandev.v_out_set(1,cfg.FixedChargeVoltage)
         cfg.MW_EEPROM_COUNTER += 1
         mylogs.info("SET CHARGE VOLTAGE: " + str(rval))
     else:
@@ -1573,24 +1692,26 @@ if (cfg.Selected_Device_Charger <=1):
     if (cfg.Selected_Device_Charger==0):
         #setup Bic2200
         #set to charge mode first
-        sc  = candev.system_config(0,0)
-        bic = candev.BIC_bidirectional_config(0,0)
+        status.DisCharger_efficacy_factor = cfg.BIC2200_efficacy_factor
+
+        sc  = mwcandev.system_config(0,0)
+        bic = mwcandev.BIC_bidirectional_config(0,0)
         if (is_bit(sc,SYSTEM_CONFIG_CAN_CTRL) or is_bit(bic,0)):
             print("MEANWELL BIC2200 IS NOT IN CAN CONTROL MODE OR BI DIRECTIONAL MODE WHICH IS NEEDED !!!\n")
             c = input("SET CONTROLS NOW ? (y/n): ")
             if(c == "y"):
-                sc  = candev.candev.system_config(1,set_bit(sc,0))
-                bic = candev.candev.BIC_bidirectional_config(1,set_bit(bic,0))
+                sc  = mwcandev.mwcandev.system_config(1,set_bit(sc,0))
+                bic = mwcandev.mwcandev.BIC_bidirectional_config(1,set_bit(bic,0))
                 print("YOU HAVE TO POWER CYCLE OFF/ON THE MEANWELL BIC2200 NOW BY YOURSELF !!")
                 cfg.MW_EEPROM_COUNTER += 2
             sys.exit(1) 
         
-        c = candev.BIC_chargemode(0,0)
+        c = mwcandev.BIC_chargemode(0,0)
         if(c==1):
-            c = candev.BIC_chargemode(1,0)
+            c = mwcandev.BIC_chargemode(1,0)
             cfg.MW_EEPROM_COUNTER += 1
             
-        cfg.BICChargeDisChargeMode = 0
+        status.BICChargeDisChargeMode = 0
         
         #start BIC2200 imidiatelly if ForceBicAlwaysOn is set
         if(cfg.ForceBicAlwaysOn):
@@ -1600,26 +1721,26 @@ if (cfg.Selected_Device_Charger <=1):
     #Meanwell NBP specific
     if (cfg.Selected_Device_Charger==1):
         #setup NPB
-        cuve = candev.NPB_curve_config(0,0,0) #Bit 7 should be 0
+        cuve = mwcandev.NPB_curve_config(0,0,0) #Bit 7 should be 0
         if (is_bit(cuve,CURVE_CONFIG_CUVE)):    #Bit 7 is 1 --> Charger Mode
             print("MEANWELL NPB IS NOT IN PSU MODE WHICH IS NEEDED !!!\n")
             c = input("SET PSU MODE NOW ? (y/n): ")
             if(c == "y"):
-                cuve = candev.NPB_curve_config(1,CURVE_CONFIG_CUVE,1) #Bit 7 should be 0
+                cuve = mwcandev.NPB_curve_config(1,CURVE_CONFIG_CUVE,1) #Bit 7 should be 0
                 print("YOU HAVE TO POWER CYCLE OFF/ON THE MEANWELL NPB NOW BY YOURSELF !!")
                 cfg.MW_EEPROM_COUNTER += 1
             sys.exit(1) 
         
-    if (cfg.MaxChargeCurrent > candev.dev_MaxChargeCurrent):
+    if (cfg.MaxChargeCurrent > mwcandev.dev_MaxChargeCurrent):
         mylogs.error("Config max charge current is too high ! " + str(cfg.MaxChargeCurrent))
-        mylogs.error("Use max charge current from device ! " + str(candev.dev_MaxChargeCurrent))
-        cfg.MaxChargeCurrent = candev.dev_MaxChargeCurrent
+        mylogs.error("Use max charge current from device ! " + str(mwcandev.dev_MaxChargeCurrent))
+        cfg.MaxChargeCurrent = mwcandev.dev_MaxChargeCurrent
         sys.exit(1)
 
-    if (cfg.MinChargeCurrent < candev.dev_MinChargeCurrent):
+    if (cfg.MinChargeCurrent < mwcandev.dev_MinChargeCurrent):
         mylogs.error("Config min charge current is too low ! " + str(cfg.MinChargeCurrent))
-        mylogs.error("Use min charge current from device ! " + str(candev.dev_MinChargeCurrent))
-        cfg.MinChargeCurrent = candev.dev_MinChargeCurrent
+        mylogs.error("Use min charge current from device ! " + str(mwcandev.dev_MinChargeCurrent))
+        cfg.MinChargeCurrent = mwcandev.dev_MinChargeCurrent
         sys.exit(1)
 
 #################################################################
@@ -1631,21 +1752,31 @@ if (cfg.Selected_Device_Charger <=1):
 # Meanwell BIC-2200
 if (cfg.Selected_Device_DisCharger == 0): 
     #set Min Discharge voltage
-    rval = candev.BIC_discharge_v(0,0)
+    rval = mwcandev.BIC_discharge_v(0,0)
     if(rval != cfg.StopDischargeVoltage):
-        candev.BIC_discharge_v(1,cfg.StopDischargeVoltage)
+        mwcandev.BIC_discharge_v(1,cfg.StopDischargeVoltage)
         cfg.MW_EEPROM_COUNTER += 1
         mylogs.info("SET DISCHARGE VOLTAGE: " + str(rval))
     else:
         mylogs.info("DISCHARGE VOLTAGE ALREADY SET: " + str(rval))
 
 
+# BIC2000
+# Because the initialisation of Meanwell is at Charger section
+# the init of BICDISCharger is also there
+
+
 # Lumentree / Trucki init
 if ((cfg.Selected_Device_DisCharger == 1) or (cfg.lt_foreceoffonstartup == 1)):
     #Init and get get Type of device
     mylogs.info("Lumentree Init discharger ...")
+
+    if(cfg.Selected_Device_DisCharger == 1): #only if LT is really the DisCharger 
+        status.DisCharger_efficacy_factor = cfg.lt_efficacy_factor
+
     if ((cfg.Selected_Device_DisCharger != 1) and (cfg.lt_foreceoffonstartup == 1)): 
         mylogs.info("Lumentree Init FORCE OFF MODE ...")
+
     try:
         LT1 = lt232(cfg.lt1_device,cfg.lt1_address,cfg.loglevel)
         LT1.lt232_open()
@@ -1693,12 +1824,17 @@ if ((cfg.Selected_Device_DisCharger == 1) or (cfg.lt_foreceoffonstartup == 1)):
         LT3.set_watt_out(0) #init with 0 #init with 0, force without any function above
         cfg.MaxDisChargeWATT = cfg.MaxDisChargeWATT + cfg.lt3_maxwatt
 
-    mylogs.info("MaxDisChargeWATT LT_calc.  :" + str(cfg.MaxDisChargeWATT))
+    mylogs.info("MaxDisChargeWATT LT_calc.  : " + str(cfg.MaxDisChargeWATT))
 
 #################################################################
 # Discharge Simulator
 if (cfg.Selected_Device_DisCharger == 255):
     mylogs.info("DISCHARGE Simulator used")
+
+#calculate the multiplyer for the DisCharger_efficacy_factor
+#is needed in % --> 94% = 6% loss --> need 1.06% more current to get the output
+status.DisCharger_efficacy_factor = (200 - status.DisCharger_efficacy_factor) / 100
+mylogs.info("DisCharger_efficacy_factor  : " + str(status.DisCharger_efficacy_factor))
     
 
 
