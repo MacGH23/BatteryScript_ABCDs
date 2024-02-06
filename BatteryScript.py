@@ -23,6 +23,8 @@
 
 # Version history
 # macGH 13.01.2024  Version 0.1.0: initial version
+# macGH 31.01.2024  Version 0.1.5: -added Webserver, EstWh Calculation, cleanup
+# macGH 04.02.2024  Version 0.1.6: -added BatteryWh estimation
 
 import os
 import sys
@@ -43,8 +45,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from io import BytesIO
 from subprocess import check_output
 
-from Meanwell.mwcan import *
-from Lumentree.lt232 import *
+from Charger.mwcan import *
+from DisCharger.lt232 import *
 from BMS.jkbms import *
 from Meter.meter import *
 
@@ -66,7 +68,10 @@ class WS(BaseHTTPRequestHandler):
         def _gettableentry(self, parameter,value):
             Button = 'n.a.'
             if((parameter=='ChargerEnabled') or (parameter=='DisChargerEnabled') or (parameter=='WebAutoRefresh')):
-                Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Toggle {parameter}</button></form>'
+                Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Toggle ON/OFF</button></form>'
+
+            if((parameter=='EstBatteryWh')):
+                Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Reset to 0</button></form>'
 
             tabcontent = '<tr>\n'+ \
                         f'<td style="border-style: solid; border-width: 1px;"><p>{parameter}</p></td>\n' + \
@@ -81,9 +86,9 @@ class WS(BaseHTTPRequestHandler):
                 refreshtime = -1
                 
             content = '<!DOCTYPE HTML>\n' + \
-                      f'<meta http-equiv="refresh" content="{refreshtime}">\n' + \
                       '<html>\n' + \
                       '<head>\n' + \
+                      f'<meta http-equiv="refresh" content="{refreshtime}">\n' + \
                       '<title>ABCDs Script Web Server</title>\n' + \
                       f'<base href={cfg.WSipadr}:{cfg.WSport}/"  target="_parent"/>\n' + \
                       '</head>\n' + \
@@ -147,8 +152,8 @@ class WS(BaseHTTPRequestHandler):
             """This just generates an HTML document that includes `message`
             """
             content = self._beginhtml(str(message),30,'/') + \
-                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;">'+ \
-                      '<tbody>'+ \
+                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;">\n'+ \
+                      '<tbody>\n'+ \
                       self._gettableentry('CurrentWattValue',status.CurrentWattValue) + \
                       self._gettableentry('CurrentTotalWatt',status.CurrentTotalWatt) + \
                       self._gettableentry('CurrentAverageWatt',status.CurrentAverageWatt) + \
@@ -159,17 +164,18 @@ class WS(BaseHTTPRequestHandler):
                       self._gettableentry('EstBatteryWh',round(status.EstBatteryWh/1000)) + \
                       self._gettableentry('BatteryVoltage',status.BatteryVoltage) + \
                       self._gettableentry('WebAutoRefresh',status.WebAutoRefresh) + \
-                      '</tbody>' + \
-                      '</table>'+ \
-                      '<form action="/" method="get">\n'+ \
-                      '<label for="Maxwatt">Maxwatt:</label>'+ \
-                      '<input type="text" id="Maxwatt" name="Maxwatt"><br><br>\n'+ \
-                      '<label for="Minwatt">Minwatt:</label>\n'+ \
-                      '<input type="text" id="Minwatt" name="Minwatt"><br><br>\n'+ \
-                      '<button type="submit">Submit</button>\n'+ \
-                      '<button type="submit" formmethod="post">Submit using POST</button>\n' + \
+                      '</tbody>\n' + \
+                      '</table>\n'+ \
                       '</form>\n' + \
                       self._endhtml()
+            
+                      #'<form action="/" method="get">\n'+ \
+                      #'<label for="Maxwatt">Maxwatt:</label>'+ \
+                      #'<input type="text" id="Maxwatt" name="Maxwatt"><br><br>\n'+ \
+                      #'<label for="Minwatt">Minwatt:</label>\n'+ \
+                      #'<input type="text" id="Minwatt" name="Minwatt"><br><br>\n'+ \
+                      #'<button type="submit">Submit</button>\n'+ \
+                      #'<button type="submit" formmethod="post">Submit using POST</button>\n' + \
             return content.encode("utf8")  # NOTE: must return a bytes object!
     
         def do_GET(self):
@@ -221,6 +227,11 @@ class WS(BaseHTTPRequestHandler):
                     status.WebAutoRefresh = 1 - status.WebAutoRefresh
                     self.wfile.write(self._statushtml(todo))
 
+                if(variable == 'EstBatteryWh'):
+                    mylogs.info("EstBatteryWh reset button pressed")
+                    todo = 'EstBatteryWh reset to 0 done'
+                    status.EstBatteryWh = 0
+                    self.wfile.write(self._statushtml(todo))
                 """
                 if(variable == 'Refresh'):
                     mylogs.info("WebServer: Refresh")
@@ -360,7 +371,7 @@ class chargerconfig:
             self.RestartChargevoltage      =  self.CellCount * self.CellvoltageMaxRestart
             self.RestartDisChargevoltage   =  self.CellCount * self.CellvoltageMinRestart
             self.RestartDisChargevoltage   =  self.CellCount * self.CellvoltageMinRestart
-            self.BatteryTotalAH            =  round(self.CellCount * self.CellAH * 3.2)
+            self.BatteryTotalWH            =  round(self.CellCount * self.CellAH * 3.2 * 1000)
     
             self.MaxChargeCurrent          =  int(updater["Setup"]["MaxChargeCurrent"].value)
             self.MinChargeCurrent          =  int(updater["Setup"]["MinChargeCurrent"].value)
@@ -539,7 +550,8 @@ class chargerconfig:
             mylogs.info("CellvoltageMin:             " + str(self.CellvoltageMin))
             mylogs.info("CellvoltageMaxRestart:      " + str(self.CellvoltageMaxRestart))
             mylogs.info("CellvoltageMinRestart:      " + str(self.CellvoltageMinRestart))
-    
+            mylogs.info("BatteryTotalWH:             " + str(self.BatteryTotalWH))
+
             mylogs.info("FixedChargeVoltage:         " + str(self.FixedChargeVoltage))
             mylogs.info("RestartChargevoltage:       " + str(self.RestartChargevoltage))
             mylogs.info("StopMinChargeCurrent:       " + str(self.StopMinChargeCurrent))
@@ -757,11 +769,15 @@ def bms_read():
         status.BMSSOC = 100
         return status.BMSSOC
 
-    #Software BMS, calculate form DC Voltage, not very exact yet, almost not useable right now ;-)
+    #Software BMS, calculate form DC Voltage, not very exact yet ;-)
+    #this works only if the EstBh calculation working almost correctly
     if (cfg.Selected_BMS == 1): 
         status.BMSVoltage = 0
         status.BMSCurrent = 0
 
+        SocVal = round((status.EstBatteryWh / cfg.BatteryTotalWH) * 100)
+
+        """
         if(status.BatteryVoltage < cfg.CellCount * cfg.CellvoltageMin):   SocVal =   0
         if(status.BatteryVoltage > cfg.CellCount * 3.05              ):   SocVal =  10
         if(status.BatteryVoltage > cfg.CellCount * 3.10              ):   SocVal =  20
@@ -773,7 +789,9 @@ def bms_read():
         if(status.BatteryVoltage > cfg.CellCount * 3.32              ):   SocVal =  80
         if(status.BatteryVoltage > cfg.CellCount * 3.35              ):   SocVal =  90
         if(status.BatteryVoltage > cfg.CellCount * cfg.CellvoltageMax):   SocVal = 100
-        status.BMSSOC     = SocVal
+        """
+
+        status.BMSSOC = SocVal
         return status.BMSSOC
 
     #JKBMS reading
@@ -1373,19 +1391,24 @@ def GetBatteryVoltage():
 
 def CalcBatteryWh():
     mylogs.debug("CalcBatteryWh ...")
-
+    
+    if(status.LastWattValueUsedinDevice <= 0):
+        EF = 1 #Charger do not need a correction
+    else:
+        EF = status.DisCharger_efficacy_factor
+        
     now  = datetime.datetime.now()
     diff = (now - status.LastMeterTime).total_seconds()  
     #get the millWattHour in seconds of the LastWattValueUsedinDevice
     #-1000: we get negative value for charging, convert to positive values
     #DisCharger_efficacy_factor needed because we need more current than we request WATT of the DisCharger
-    LastWatt_mWh = status.LastWattValueUsedinDevice * status.DisCharger_efficacy_factor * -1000 / 3600
+    LastWatt_mWh = status.LastWattValueUsedinDevice * EF * -1000 / 3600
 
     #and multiply with the duration
     Bat_mWh = LastWatt_mWh * diff 
     status.EstBatteryWh = status.EstBatteryWh + Bat_mWh
     status.LastMeterTime = now
-    mylogs.verbose("CalcBatteryWh: LastWatt_mWh :" + str(round(LastWatt_mWh,2)) + " - Bat_mAH: " + str(round(Bat_mWh,2)) + " - EF: " + str(status.DisCharger_efficacy_factor) + " - TimeDiff: " + str(round(diff,2)))
+    mylogs.verbose("CalcBatteryWh: LastWatt_mWh :" + str(round(LastWatt_mWh,2)) + " - Bat_mAH: " + str(round(Bat_mWh,2)) + " - EF: " + str(EF) + " - TimeDiff: " + str(round(diff,2)))
 
 #####################################################################
 #calculate the output power by array
