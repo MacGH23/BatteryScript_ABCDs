@@ -23,8 +23,10 @@
 
 # Version history
 # macGH 13.01.2024  Version 0.1.0: initial version
-# macGH 31.01.2024  Version 0.1.5: -added Webserver, EstWh Calculation, cleanup
-# macGH 04.02.2024  Version 0.1.6: -added BatteryWh estimation
+# macGH 31.01.2024  Version 0.1.5: added Webserver, EstWh Calculation, cleanup
+# macGH 04.02.2024  Version 0.1.6: added BatteryWh estimation
+# macGh 09.02.2024  Version 0.1.7: added voltage check for discharger
+# macGh 11.02.2024  Version 0.1.8: fixed save & restore of EstBatteryWh
 
 import os
 import sys
@@ -72,6 +74,12 @@ class WS(BaseHTTPRequestHandler):
 
             if((parameter=='EstBatteryWh')):
                 Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Reset to 0</button></form>'
+
+                      #f'<input type="text" name="EstBatteryWhValue" placeholder="{value}">' + \
+                      #'<label for="Minwatt">Minwatt:</label>\n'+ \
+                      #'<input type="text" id="Minwatt" name="Minwatt"><br><br>\n'+ \
+                      #'<button type="submit">Submit</button>\n'+ \
+                      #'<button type="submit" formmethod="post">Submit using POST</button>\n' + \
 
             tabcontent = '<tr>\n'+ \
                         f'<td style="border-style: solid; border-width: 1px;"><p>{parameter}</p></td>\n' + \
@@ -161,8 +169,10 @@ class WS(BaseHTTPRequestHandler):
                       self._gettableentry('ChargerEnabled',status.ChargerEnabled) + \
                       self._gettableentry('DisChargerEnabled',status.DisChargerEnabled) + \
                       self._gettableentry('BMSSOC',status.BMSSOC) + \
-                      self._gettableentry('EstBatteryWh',round(status.EstBatteryWh/1000)) + \
                       self._gettableentry('BatteryVoltage',status.BatteryVoltage) + \
+                      self._gettableentry('EstBatteryWh',round(status.EstBatteryWh/1000)) + \
+                      self._gettableentry('BatteryFull',status.BatteryFULL) + \
+                      self._gettableentry('BatteryEmpty',status.BatteryEMPTY) + \
                       self._gettableentry('WebAutoRefresh',status.WebAutoRefresh) + \
                       '</tbody>\n' + \
                       '</table>\n'+ \
@@ -232,18 +242,6 @@ class WS(BaseHTTPRequestHandler):
                     todo = 'EstBatteryWh reset to 0 done'
                     status.EstBatteryWh = 0
                     self.wfile.write(self._statushtml(todo))
-                """
-                if(variable == 'Refresh'):
-                    mylogs.info("WebServer: Refresh")
-                    todo = 'Refresh done'
-                    if(self.path == '/'):
-                        self.wfile.write(self._statushtml("Read Status"))
-                    if(self.path == '/config'):
-                        self.wfile.write(self._confightml("Read config"))
-                    if(self.path == '/bms'):
-                        self.wfile.write(self._bmshtml("Read BMS status"))
-                    return
-                """                    
     
             return
 
@@ -717,7 +715,7 @@ def gpio_callback(channel):
 # Main Status
 #####################################################################
 def logstatus():
-        mylogs.info("-> STATUS:  C:" + str(status.ChargerEnabled) + "  D:" + str(status.DisChargerEnabled) + " | SOC:" + str(status.BMSSOC) + "%  BattV:" + str(status.BatteryVoltage/100) + "V |  Total: " + str(status.CurrentTotalWatt) + "W  Meter:" + str(status.CurrentWattValue) + "W  Average: " + str(status.CurrentAverageWatt) + "W  LOUT:" + str(status.LastWattValueUsedinDevice) + "W - RCAP: " + str(round(status.EstBatteryWh/1000)) )
+        mylogs.info("-> STATUS: C:" + str(status.ChargerEnabled) + " D:" + str(status.DisChargerEnabled) + " | SOC:" + str(status.BMSSOC) + "%  BattV:" + str(status.BatteryVoltage/100) + "V |  Total: " + str(status.CurrentTotalWatt) + "W  Meter:" + str(status.CurrentWattValue) + "W  Average: " + str(status.CurrentAverageWatt) + "W  LOUT:" + str(status.LastWattValueUsedinDevice) + "W | RCAP: " + str(round(status.EstBatteryWh/1000)) )
 
 #####################################################################
 # LCD routine
@@ -894,22 +892,24 @@ def StartStopOperationDisCharger(val,force=0):
         status.BatteryEMPTY = 0
 
     #Battery is empty, stop Discharing and wait for charging
-    if((status.BatteryVoltage > 0) and (status.BatteryVoltage <= cfg.StopDischargeVoltage)):
+    # Do not discharge any further if SOC or voltage is lower than specified
+    if(((status.BatteryVoltage > 0) and (status.BatteryVoltage <= cfg.StopDischargeVoltage)) or (status.BMSSOC <= cfg.BMSminSOC) ):
         status.BatteryEMPTY = 1
         #Set EstBatteryWh to 0, because for this schript the Battery is empty 
-        cfg.EstBatteryWh    = 0
+        status.EstBatteryWh    = 0
 
     if(status.BatteryEMPTY == 1):
         mylogs.info("StartStopOperationDisCharger: Battery EMPTY ! Battery Voltage: " + str(status.BatteryVoltage/100) + ' - SOC: ' + str(status.BMSSOC))
         val = 0
 
-    if (force==0): #if force = 1, proceeed without any logic 
-        # Do not discharge any further if SOC is lower than specified
-        if ((status.BMSSOC <= cfg.BMSminSOC) or (status.BatteryVoltage <= cfg.StopDischargeVoltage)):
-            val = 0 
-            mylogs.info("StartStopOperationDisCharger: SOC or Voltage too low: " + str(status.BMSSOC) + "% or " + str(status.BatteryVoltage) + "V ->  SET VALUE TO: " + str(val))
+    #Check if Battery Volatge is online, if not try to disable discharger
+    if(status.BatteryVoltage == 0):
+        mylogs.error("StartStopOperationDisCharger: Battery Voltage can not be read. Battery Voltage: 0")
+        val = 0
 
-        if(status.DisChargerStatus == 0) and (val == 0): 
+    if (force==0): #if force = 1, proceeed without any logic 
+
+        if((status.DisChargerStatus == 0) and (val == 0)): 
             mylogs.verbose("StartStopOperationDisCharger: Already off mode")
             return #DisCharger already off, can stop here
         
@@ -927,7 +927,7 @@ def StartStopOperationDisCharger(val,force=0):
         if (val > cfg.ZeroDeltaDisChargeWATT):
             Newval = val - cfg.ZeroDeltaDisChargeWATT
             status.ZeroExportWatt = cfg.ZeroDeltaDisChargeWATT
-            mylogs.info("ZEROExport: " + str(val) + " -> " + str(Newval) + " (Delta: " + str(cfg.ZeroDeltaDisChargeWATT) + ")")
+            mylogs.info("ZEROExport: Meter: " + str(val) + " -> ZeroWatt: " + str(Newval) + " (Delta: " + str(cfg.ZeroDeltaDisChargeWATT) + ")")
 
 
     #Which Device used
@@ -949,6 +949,8 @@ def StartStopOperationDisCharger(val,force=0):
     return
 
 
+#####################################################################
+#####################################################################
 #####################################################################
 # Operation Meanwell
 def StartStopOperationMeanwell(val, force=0):
@@ -996,82 +998,6 @@ def StartStopOperationMeanwell(val, force=0):
 #            mylogs.debug("Meanwell: Operation mode already ON")
    
     return val
-
-
-def DisCharger_BIC2200_Set(val,force=0):
-    mylogs.verbose("DisCharger_BIC2200_Set value: " + str(val) + " Force: " + str(force))
-
-    status.BICChargeDisChargeMode = mwcandev.BIC_chargemode(0,0)
-    if(status.BICChargeDisChargeMode==0):
-        mylogs.info("StartStopOperationDisCharger: Set BIC2200 to DisCharge Mode")
-        mwcandev.BIC_chargemode(1,1)  #set BIC to DisChargemode
-        cfg.MW_EEPROM_COUNTER += 1
-#        status.BICChargeDisChargeMode=1
-
-    #read voltage from BIC device
-    vout  = mwcandev.v_out_read()
-    
-    #Calculate current for meanwell + or - to the actual power from PV / Grid
-    #*-10000 --> Vout and iout value is *100 --> 2x100 = 10000
-    #charging/discharging current in *100 for meanwell --> e.g. 2600 = 26A
-    
-    Current = (val * 10000) / vout; 
-
-    IntCurrent = int(Current)
-    OPStart = True #device start
-
-    if (IntCurrent >= cfg.MaxDisChargeCurrent):
-        IntCurrent = cfg.MaxDisChargeCurrent 
-
-#    #calculate ZeroDelta if configured
-    ZeroDelta = int((cfg.ZeroDeltaDisChargerWatt / vout)*10000)
-    mylogs.info("ZERODELTA IS: " + str(ZeroDelta))
-    status.ZeroExportWatt = 0 #Reset to 0 and see if we need it later
-
-    #BIC device has a minimal DisCharge current
-    #Stop if this value is reached or allow take power from grid to charge 
-    if (IntCurrent <= cfg.MinDisChargeCurrent):
-        if (IntCurrent < (cfg.MinDisChargeCurrent - ZeroDelta)):
-            mylogs.info("Meanwell BIC: Current too small - " + str(IntCurrent) + " - MinCurrent: " + str(cfg.MinDisChargeCurrent) + " - ZeroDelta: " + str(ZeroDelta)+ " -> Device OFF")
-            IntCurrent = 0;
-            OPStart = False 
-        else:
-            IntCurrent = cfg.MinDisChargeCurrent
-            status.ZeroImportWatt = cfg.ZeroDeltaChargerWatt
-            mylogs.info("Meanwell BIC: ZeroExportWatt used - " + str(cfg.ZeroDeltaDisChargerWatt))
-
-    if (IntCurrent != status.LastDisChargerCurrent):
-        if (status.actchargercounter >= cfg.MeterUpdateCounter):
-            mylogs.info("Meanwell BIC: Set new current to: " + str(IntCurrent) + "  (Last current: " + str(status.LastDisChargerCurrent) + ")")
-            c = mwcandev.BIC_discharge_i(1,IntCurrent)
-            status.LastDisChargerCurrent = IntCurrent;
-            cfg.MW_EEPROM_COUNTER += 1
-        else:
-            mylogs.verbose("Meanwell BIC: Wait for next change: " + str(status.actchargercounter) + "  of: " + str(cfg.MeterUpdateCounter))
-            status.actchargercounter += 1
-    else:
-        mylogs.info("Meanwell BIC: No New current to set. Last current: " + str(status.LastDisChargerCurrent))
-        
-    
-    #try to set the new ChargeCurrent if possible
-    if (OPStart == True): #if true start mw device 
-        mylogs.verbose("OPSTART TRUE : Start Meanwell Device")
-        status.DisChargerStatus  = 1
-        StartStopOperationMeanwell(1,force)
-    else: 
-        mylogs.verbose("OPSTART FALSE: Stop Meanwell Device")
-        status.DisChargerStatus  = 0
-#        status.ZeroExportWatt = 0
-        StartStopOperationMeanwell(0,force)     
-
-    sleep(0.3)
-    iout  = mwcandev.i_out_read()
-    NewVal = int((iout*vout)/10000)
-
-    mylogs.info("Meanwell BIC: W Battery_Vout:" + str(vout/100) + ":V: Battery_I_out:" + str(iout/100) + ":A: I Calc:" + str(IntCurrent) + " = " + str(IntCurrent/100) + ":A --> WATT: " + str(NewVal))
-
-    status.LastWattValueUsedinDevice = NewVal
-    return
 
 
 def Charger_Meanwell_Set(val,force=0):
@@ -1148,7 +1074,7 @@ def Charger_Meanwell_Set(val,force=0):
                 OPStart = True             
     else:
         if(IntCurrent != 0):
-            mylogs.info("Meanwell: No New current to set. Last current: " + str(status.LastChargerSetCurrent))
+            mylogs.verbose("Meanwell: No New current to set. Last current: " + str(status.LastChargerSetCurrent))
             OPStart = True #device start or continue
         
               
@@ -1181,6 +1107,83 @@ def Charger_Meanwell_Set(val,force=0):
 
     return OPStart
 
+#####################################################################
+# Operation BIC-2200 DisCharger Meanwell
+def DisCharger_BIC2200_Set(val,force=0):
+    mylogs.verbose("DisCharger_BIC2200_Set value: " + str(val) + " Force: " + str(force))
+
+    #Check Mode to prevent to set it again if not needed
+    #0=Charger; 1=DisCharger
+    status.BICChargeDisChargeMode = mwcandev.BIC_chargemode(0,0)
+    if(status.BICChargeDisChargeMode==0):
+        mylogs.info("StartStopOperationDisCharger: Set BIC2200 to DisCharge Mode")
+        mwcandev.BIC_chargemode(1,1)  #set BIC to DisChargemode
+        cfg.MW_EEPROM_COUNTER += 1
+
+    #read voltage from BIC device
+    vout  = mwcandev.v_out_read()
+    
+    #Calculate current for meanwell + or - to the actual power from PV / Grid
+    #*-10000 --> Vout and iout value is *100 --> 2x100 = 10000
+    #charging/discharging current in *100 for meanwell --> e.g. 2600 = 26A
+    
+    Current = (val * 10000) / vout; 
+
+    IntCurrent = int(Current)
+    OPStart = True #device start
+
+    if (IntCurrent >= cfg.MaxDisChargeCurrent):
+        IntCurrent = cfg.MaxDisChargeCurrent 
+
+#    #calculate ZeroDelta if configured
+    ZeroDelta = int((cfg.ZeroDeltaDisChargerWatt / vout)*10000)
+    mylogs.info("ZERODELTA IS: " + str(ZeroDelta))
+    status.ZeroExportWatt = 0 #Reset to 0 and see if we need it later
+
+    #BIC device has a minimal DisCharge current
+    #Stop if this value is reached or allow take power from grid to charge 
+    if (IntCurrent <= cfg.MinDisChargeCurrent):
+        if (IntCurrent < (cfg.MinDisChargeCurrent - ZeroDelta)):
+            mylogs.info("Meanwell BIC: Current too small - " + str(IntCurrent) + " - MinCurrent: " + str(cfg.MinDisChargeCurrent) + " - ZeroDelta: " + str(ZeroDelta)+ " -> Device OFF")
+            IntCurrent = 0;
+            OPStart = False 
+        else:
+            IntCurrent = cfg.MinDisChargeCurrent
+            status.ZeroImportWatt = cfg.ZeroDeltaChargerWatt
+            mylogs.info("Meanwell BIC: ZeroExportWatt used - " + str(cfg.ZeroDeltaDisChargerWatt))
+
+    if (IntCurrent != status.LastDisChargerCurrent):
+        if (status.actchargercounter >= cfg.MeterUpdateCounter):
+            mylogs.info("Meanwell BIC: Set new current to: " + str(IntCurrent) + "  (Last current: " + str(status.LastDisChargerCurrent) + ")")
+            c = mwcandev.BIC_discharge_i(1,IntCurrent)
+            status.LastDisChargerCurrent = IntCurrent;
+            cfg.MW_EEPROM_COUNTER += 1
+        else:
+            mylogs.verbose("Meanwell BIC: Wait for next change: " + str(status.actchargercounter) + "  of: " + str(cfg.MeterUpdateCounter))
+            status.actchargercounter += 1
+    else:
+        mylogs.info("Meanwell BIC: No New current to set. Last current: " + str(status.LastDisChargerCurrent))
+        
+    
+    #try to set the new ChargeCurrent if possible
+    if (OPStart == True): #if true start mw device 
+        mylogs.verbose("OPSTART TRUE : Start BIC2200")
+        status.DisChargerStatus  = 1
+        StartStopOperationMeanwell(1,force)
+    else: 
+        mylogs.verbose("OPSTART FALSE: Stop BIC2200")
+        status.DisChargerStatus  = 0
+#        status.ZeroExportWatt = 0
+        StartStopOperationMeanwell(0,force)     
+
+    sleep(0.3)
+    iout  = mwcandev.i_out_read()
+    NewVal = int((iout*vout)/10000)
+
+    mylogs.info("Meanwell BIC: W Battery_Vout:" + str(vout/100) + ":V: Battery_I_out:" + str(iout/100) + ":A: I Calc:" + str(IntCurrent) + " = " + str(IntCurrent/100) + ":A --> WATT: " + str(NewVal))
+
+    status.LastWattValueUsedinDevice = NewVal
+    return
 
 
 #####################################################################
@@ -1242,7 +1245,12 @@ def DisCharger_Lumentree_Set(val,force=0):
     if (val==0): outpower = 0
     
     if (force==0):
-        p = abs(status.LastWattValueUsedinDevice - outpower)
+        if((status.LastWattValueUsedinDevice == 0) and (status.DisChargerStatus == 1)):
+            #Lumentree has not raised the output, but we get 0 already to set off again
+            p = 10
+        else:
+            p = abs(status.LastWattValueUsedinDevice - outpower)
+
         if(p <= 8): #since Lumentree don't have exact value we can set, use +/-8 to test if we have the same value
             mylogs.verbose("DisCharger_Lumentree_Set: No change to DISCharger output: " + str(status.LastWattValueUsedinDevice) + " NewWatt Value: " + str(outpower))
             return 0     #no need to set the same again, mainly for max power, delta is handled above
@@ -1260,7 +1268,7 @@ def DisCharger_Lumentree_Set(val,force=0):
         if (DCvoltage < 10): 
             if (status.DisChargerStatus == 0):
                 #only if DisCarger is set already to OFF, otherwise proceed to power off
-                mylogs.info("DisCharger_Lumentree_Set: DC volatge too low. Probably Battery empty : " + str(DCvoltage))
+                mylogs.info("DisCharger_Lumentree_Set: DC volatge too low. Probably Battery empty or defect : " + str(DCvoltage))
                 return
             else:
                 #Disable DisCharger
@@ -1341,7 +1349,7 @@ def GetChargerVoltage():
         if (cfg.Selected_Device_Charger <= 1): #BIC and NPB-abc0
             status.ChargerVoltage = mwcandev.v_out_read()
 
-    except:
+    except Exception as e:
         mylogs.error("GetChargerVoltage EXEPTION !")
         mylogs.error(str(e))
     return status.ChargerVoltage
@@ -1350,14 +1358,14 @@ def GetChargerVoltage():
 def GetDisChargerVoltage():
     mylogs.debug("GetDisChargerVoltage ...")
     try:
-        if (cfg.Selected_DisDevice_Charger == 0): #BIC2200
+        if (cfg.Selected_Device_DisCharger == 0): #BIC2200
             status.DisChargerVoltage = mwcandev.v_out_read()
             
-        if (cfg.Selected_DisDevice_Charger == 1): #Lumentree
+        if (cfg.Selected_Device_DisCharger == 1): #Lumentree
             #status.DisChargerVoltage = LT1.readDCvoltage() * 10 #return 3 digits, need 4 for compare --> *10
-            mylogs.info("GetDisChargerVoltage: Nothing to do here, this is already done in Lumentree_Check !")
+            mylogs.debug("GetDisChargerVoltage: Nothing to do here, this is already done in Lumentree_Check !")
 
-    except:
+    except Exception as e:
         mylogs.error("GetDisChargerVoltage EXEPTION !")
         mylogs.error(str(e))
     return status.ChargerVoltage
@@ -1383,7 +1391,7 @@ def GetBatteryVoltage():
         #add the voltage correction to the value + or -
         status.BatteryVoltage = status.BatteryVoltage + cfg.BatteryVoltageCorrection
 
-    except:
+    except Exception as e:
         mylogs.error("GetBatteryVoltage EXEPTION !")
         mylogs.error(str(e))
     
@@ -1699,7 +1707,7 @@ if (cfg.Selected_Device_Charger <=1):
     mylogs.info("Grid Voltage: " + str(Voltage_IN) + " V")
     
     #Set main parameter and stop device
-    mylogs.debug("Operation STOP: " + str(mwcandev.operation(1,0)))
+    mylogs.debug("Meanwell Operation STOP at startup: " + str(mwcandev.operation(1,0)))
     StartStopOperationCharger(0,1)
 
     #Set fixed charge voltage to device BIC and NPB
@@ -1729,17 +1737,12 @@ if (cfg.Selected_Device_Charger <=1):
                 cfg.MW_EEPROM_COUNTER += 2
             sys.exit(1) 
         
-        c = mwcandev.BIC_chargemode(0,0)
-        if(c==1):
-            c = mwcandev.BIC_chargemode(1,0)
-            cfg.MW_EEPROM_COUNTER += 1
+        #Read the current mode from BIC-2200
+        status.BICChargeDisChargeMode = mwcandev.BIC_chargemode(0,0)
             
-        status.BICChargeDisChargeMode = 0
-        
         #start BIC2200 imidiatelly if ForceBicAlwaysOn is set
         if(cfg.ForceBicAlwaysOn):
             StartStopOperationMeanwell(1,1)
-            
 
     #Meanwell NBP specific
     if (cfg.Selected_Device_Charger==1):
@@ -1847,6 +1850,7 @@ if ((cfg.Selected_Device_DisCharger == 1) or (cfg.lt_foreceoffonstartup == 1)):
         LT3.set_watt_out(0) #init with 0 #init with 0, force without any function above
         cfg.MaxDisChargeWATT = cfg.MaxDisChargeWATT + cfg.lt3_maxwatt
 
+    Lumentree_Check() #Get The first voltage needed for later
     mylogs.info("MaxDisChargeWATT LT_calc.  : " + str(cfg.MaxDisChargeWATT))
 
 #################################################################
@@ -1880,9 +1884,16 @@ if (cfg.Selected_BMS != 0):
             printlcd("EXEPT JKBMS",str(e))
             sys.exit(1)
 
-    sleep(0.5) #wait until bus is ready
+    sleep(1) #wait until bus is ready
     bms_read()
-    
+
+#Now the Battery hardware should be initilized
+#Read the first battery value to initilize voltage
+#Just check all sources.
+GetChargerVoltage()
+GetDisChargerVoltage()
+GetBatteryVoltage()    
+
 
 #################################################################
 #################################################################
