@@ -136,6 +136,28 @@ To start using TMUX you can start_tmux.sh<br>
 `./start_tmux.sh`<br>
 To connect to Tmux:<br>
 `./ShowBS.sh`<br>
+<br>
+
+**Meanwell installation hints:<br>**
+- BIC-2200 (need to be installed by a electrically qualified person):<br>
+Normally a ON Jumperwire is installed in the device.<br>
+Before setup everything (including AC/DC cables) remove this cable (prevent to start before configured).<br>
+Connect the CANBus cable to the RasPi but **not** the DC wires.<br>
+Now connect it to AC.<br>
+The Device should start itself but should not do any AC<->DC conversion.<br>
+Run the script the first time and allow to set the needed parameter.<br>
+After that you need do a AC power cycle. <br>
+Now connect the DC wires to the battery during it is OFF and<br>
+connect the ON Jumperwire back to device.<br>
+Connect it to AC and run the script (after configuration of cource).<br>
+- NPB:<br>
+Connect the CANBus cable to the RasPi but **not** the the DC wires to the battery.<br>
+Connect it to AC and switch it on.<br>
+Run the script the first time and allow to set the needed parameter.<br>
+After that you need do a AC power cycle.<br>
+Now connect the DC wires to the battery during it is OFF.<br>
+Run the script (after configuration of cource).<br>
+<br>
 
 **Add new devices:<br>**
 You have to provide the interface to the device. If possible add a class in a subfolder for easier handling:<br>
