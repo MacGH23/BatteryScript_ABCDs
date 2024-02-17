@@ -29,6 +29,7 @@
 # macGh 09.02.2024  Version 0.1.7: added voltage check for discharger
 # macGh 11.02.2024  Version 0.1.8: fixed save & restore of EstBatteryWh
 # macGh 14.02.2024  Version 0.1.9: fixed BIC-2200 DisCharger function
+# macGh 15.02.2024  Version 0.2.0: added mw Voltage correction
 
 import os
 import sys
@@ -313,7 +314,7 @@ class Devicestatus:
 
     def __init__(self):
         self.configfile                 = ""
-        self.LastMeterTime              = datetime.datetime.now()
+        self.LastMeterTime              = datetime.datetime.now()     #init with start time
         self.ChargerEnabled             = 1   # for remote enable and disable
         self.DisChargerEnabled          = 1   # for remote enable and disable
         self.CurrentWattValue           = 0   # from Meter
@@ -1113,7 +1114,7 @@ def Charger_Meanwell_Set(val,force=0):
                 OPStart = False #device start
             else:
                 if((status.LastChargerGetCurrent < (status.LastChargerSetCurrent-50)) and (status.BMSSOC > 98)):
-                    mylogs.info("Meanwell: >>>> NO SET -> BATTERY ALMOST FULL: " + str(IntCurrent) + " (Last current GET: " + str(status.LastChargerGetCurrent)  + "  (Last current SET: " + str(status.LastChargerSetCurrent) + ") <<<<")
+                    mylogs.info("Meanwell: >>>> NO SET -> BATTERY ALMOST FULL: " + str(IntCurrent) + " (Last current GET: " + str(status.LastChargerGetCurrent)  + " ->  Last current SET: " + str(status.LastChargerSetCurrent) + " <<<<")
                     OPStart = True #device start or continue
                 else:
                     mylogs.info("Meanwell: SET NEW CURRENT TO: " + str(IntCurrent))
@@ -1530,6 +1531,7 @@ def process_power(power):
 
     now  = datetime.datetime.now()
     diff = (now - status.LastMeterTime).total_seconds()  
+    #status.LastMeterTime will be set in CalcBatteryWh
     if(diff < 1.65): #2 seconds minmum, we need about 250-350ms for processing
         mylogs.warning("process_power: Too fast power meter reading ! Ignore value: " + str(diff))
         return
@@ -1767,7 +1769,10 @@ if (cfg.Selected_Device_Charger <=1):
     #mwcandev.operation(1,0)
     #StartStopOperationCharger(0,1)
     StartStopOperationMeanwell(0,1,1)
+    
 
+    mylogs.debug(mwt + " Serial  : " + mwcandev.serial_read())
+    mylogs.debug(mwt + " Firmware: " + str(mwcandev.firmware_read()))
     mylogs.info(mwt + " temperature: " + str(mwcandev.temp_read()/10) + " C")
     
     #Set ChargerMainVoltage of the charger to check the parameters, needs to be in value *100, 24 = 2400
@@ -1788,6 +1793,7 @@ if (cfg.Selected_Device_Charger <=1):
 
         sc  = mwcandev.system_config(0,0)
         bic = mwcandev.BIC_bidirectional_config(0,0)
+        mylogs.debug("BIC sc: " + str(sc) + " bic: " + str(bic))
         if ((not is_bit(sc,SYSTEM_CONFIG_CAN_CTRL)) or (not is_bit(bic,0))):
             print("MEANWELL BIC2200 IS NOT IN CAN CONTROL MODE OR BI DIRECTIONAL MODE WHICH IS NEEDED !!!\n")
             c = input("SET CONTROLS NOW ? (y/n): ")
@@ -1806,8 +1812,8 @@ if (cfg.Selected_Device_Charger <=1):
 #    if (cfg.Selected_Device_DisCharger == 0): 
         #set Min Discharge voltage
         rval = mwcandev.BIC_discharge_v(0,0)
-        if(rval != cfg.StopDischargeVoltage):
-            mwcandev.BIC_discharge_v(1,cfg.StopDischargeVoltage)
+        if(rval != cfg.StopDischargeVoltage  + cfg.MW_DisChargeVoltCorr):
+            mwcandev.BIC_discharge_v(1,cfg.StopDischargeVoltage + cfg.MW_DisChargeVoltCorr)
             MW_EEPROM_Counter_INC(1)
             mylogs.info("SET DISCHARGE VOLTAGE: " + str(rval))
         else:
@@ -1832,7 +1838,8 @@ if (cfg.Selected_Device_Charger <=1):
         #setup NPB
         sc  = mwcandev.system_config(0,0)
         cuve = mwcandev.NPB_curve_config(0,0,0) #Bit 7 should be 0
-        if ((is_bit(cuve,CURVE_CONFIG_CUVE)) or (sc != 0)):    #Bit 7 is 1 --> Charger Mode, Startuo OFF = 0
+        mylogs.info("NPB sc: " + str(sc) + " cuve: " + str(cuve))
+        if ((is_bit(cuve,CURVE_CONFIG_CUVE)) or (sc != 1)):    #Bit 7 is 1 --> Charger Mode, Startuo OFF = 0
             print("MEANWELL NPB IS NOT IN PSU MODE WHICH IS NEEDED OR NOT OFF DURING STARTUP!!!\n")
             c = input("SET PSU MODE NOW ? (y/n): ")
             if(c == "y"):
@@ -1844,8 +1851,8 @@ if (cfg.Selected_Device_Charger <=1):
 
     #Set fixed charge voltage to device BIC and NPB
     rval = mwcandev.v_out_set(0,0)
-    if(rval != cfg.FixedChargeVoltage):
-        rval = mwcandev.v_out_set(1,cfg.FixedChargeVoltage)
+    if(rval != cfg.FixedChargeVoltage + cfg.MW_ChargeVoltCorr):
+        rval = mwcandev.v_out_set(1,cfg.FixedChargeVoltage + cfg.MW_ChargeVoltCorr)
         MW_EEPROM_Counter_INC(0)
         mylogs.info("SET CHARGE VOLTAGE: " + str(rval))
     else:

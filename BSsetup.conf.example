@@ -240,7 +240,7 @@ MeterUpdateCounter = 8
 # the lumentree will start at max power during startup, this will prevent this
 # Power in WATT ! 
 # 570W = 570
-lt_foreceoffonstartup    = 1
+lt_foreceoffonstartup    = 0
 #Max. Efficacy Factor in % of the Lumentree (datasheet), needed for Ah calculation 
 lt_efficacy_factor = 90
 
