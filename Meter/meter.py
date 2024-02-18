@@ -122,8 +122,9 @@ class meter:
     def GetPowermeterWattsTasmota(self):
         url = f'http://{self.ip}/cm?cmnd=status%2010'
         ParsedData = requests.get(url, timeout=10).json()
+        logging.debug(ParsedData)
         powerz1    = (ParsedData['StatusSNS'])
-        powerz2    = (powerz1['Haus'])
+        powerz2    = (powerz1['ENERGY'])
         Watts      = (powerz2['Power'])
 
 #        if not TASMOTA_JSON_POWER_CALCULATE:
@@ -139,6 +140,7 @@ class meter:
         url = f'http://{self.ip}/status'
         headers = {"content-type": "application/json"}
         ParsedData = requests.get(url, headers=headers, auth=(self.user, self.password), timeout=10).json()
+        logging.debug(ParsedData)
         Watts = sum(self.CastToInt(emeter['power']) for emeter in ParsedData['emeters'])
         logging.debug("METER: powermeter Shelly EM: %s %s",Watts," Watt")
         return self.CastToInt(Watts)
@@ -147,6 +149,7 @@ class meter:
         url = f'http://{self.ip}/status'
         headers = {"content-type": "application/json"}
         ParsedData = requests.get(url, headers=headers, auth=(self.user, self.password), timeout=10).json()
+        logging.debug(ParsedData)
         Watts = self.CastToInt(ParsedData['total_power'])
         logging.debug("METER: powermeter Shelly 3EM: %s %s",Watts," Watt")
         return self.CastToInt(Watts)
@@ -155,6 +158,7 @@ class meter:
         url = f'http://{self.ip}/rpc/EM.GetStatus?id=0'
         headers = {"content-type": "application/json"}
         ParsedData = requests.get(url, headers=headers, auth=HTTPDigestAuth(self.user, self.password), timeout=10).json()
+        logging.debug(ParsedData)
         Watts = self.CastToInt(ParsedData['total_act_power'])
         logging.debug("METER: powermeter Shelly 3EM Pro: %s %s",Watts," Watt")
         return self.CastToInt(Watts)
@@ -162,6 +166,7 @@ class meter:
     def GetPowermeterWattsShrdzm(self):
         url = f'http://{self.ip}/getLastData?user={self.user}&password={self.password}'
         ParsedData = requests.get(url, timeout=10).json()
+        logging.debug(ParsedData)
         Watts = self.CastToInt(CastToInt(ParsedData['1.7.0']) - CastToInt(ParsedData['2.7.0']))
         logging.debug("METER: powermeter SHRDZM: %s %s",Watts," Watt")
         return self.CastToInt(Watts)
@@ -169,6 +174,7 @@ class meter:
     def GetPowermeterWattsEmlog(self):
         url = f'http://{self.ip}/pages/getinformation.php?heute&meterindex={self.EMLOG_METERINDEX}'
         ParsedData = requests.get(url, timeout=10).json()
+        logging.debug(ParsedData)
         Watts = self.CastToInt(CastToInt(ParsedData['Leistung170']) - CastToInt(ParsedData['Leistung270']))
         logging.debug("METER: powermeter EMLOG: %s %s",Watts," Watt")
         return self.CastToInt(Watts)
@@ -176,6 +182,7 @@ class meter:
     def GetPowermeterWattsVZLogger(self):
         url = f"http://{self.ip}:{self.port}/{self.VZL_UUID}"
         ParsedData = requests.get(url, timeout=10).json()
+        logging.debug(ParsedData)
         Watts = self.CastToInt(ParsedData['data'][0]['tuples'][0][1])
         logging.debug("METER: powermeter VZLogger: %s %s",Watts," Watt")
         return self.CastToInt(Watts)
@@ -184,6 +191,7 @@ class meter:
     def GetPowermeterWattsIobroker(self):
         url = f'http://{self.ip}:{self.port}/getPlainValue/{self.iobrogerobject}'
         ParsedData = requests.get(url, timeout=10)
+        logging.debug(ParsedData)
         Watts = self.CastToInt(ParsedData.text)
         logging.debug("METER: powermeter IOBROKER: %s %s",Watts," Watt")
         return self.CastToInt(Watts)
