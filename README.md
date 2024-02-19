@@ -117,7 +117,9 @@ Some python lib needed. Please install:<br>
 `pip3 install paho-mqtt`<br>
 `pip3 install ifcfg`<br>
 `pip3 install minimalmodbus`<br>
-`pip3 install configupdater`<br><br>
+`pip3 install configupdater`<br>
+`pip3 install psutil`<br><br>
+
 For the serial communication with Lumentree and BMS the user must be added to dialout group<br>
 `sudo usermod -a -G tty $USER`<br>
 
