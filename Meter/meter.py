@@ -32,7 +32,16 @@ from requests.auth import HTTPDigestAuth
 
 ######################################################################################
 # def __init__(self, meter, ip, port, user, password, vzl_uuid, emlog, iobrogerobject, loglevel):
-#
+# Meter
+# 1: SHELLY_EM
+# 2: SHELLY_3EM
+# 3: SHELLY_3EMPRO
+# 4: TASMOTA
+# 5: SHRDZM
+# 6: EMLOG
+# 7: IOBROKER
+# 8: HOMEASSISTANT
+# 9: VZLOGGER
 #
 # idadr
 # ip             of the Meter you have installed

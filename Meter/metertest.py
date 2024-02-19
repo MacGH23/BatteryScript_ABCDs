@@ -5,6 +5,7 @@
 
 # What is missing:
 # macGH 13.01.2024  Version 0.1.0
+# macGH 18.02.2024  Version 0.1.1
 
 import os
 import sys
@@ -12,10 +13,20 @@ import signal
 import atexit
 from meter import *
 
+# Meter
+# 1: SHELLY_EM
+# 2: SHELLY_3EM
+# 3: SHELLY_3EMPRO
+# 4: TASMOTA
+# 5: SHRDZM
+# 6: EMLOG
+# 7: IOBROKER
+# 8: HOMEASSISTANT
+# 9: VZLOGGER
 
-usedmeter           = 7
-usedip              = "192.168.179.100"
-usedport            = "8087"
+usedmeter           = 4
+usedip              = "192.168.179.10"
+usedport            = "80"
 useduser            = "username"
 usedpass            = "password"
 usedvzl_uuid        = "UUID"
@@ -40,7 +51,7 @@ def on_exit():
 def handle_exit(signum, frame):
     sys.exit(0)
 
-def mwcan_commands():
+def meter_commands():
     print("")
     print(" " + sys.argv[0] + " - Getting meter info")
     print(" Edit data in this py script at the beginning")
@@ -50,20 +61,24 @@ def mwcan_commands():
     print("")
     print("       readwatt             -- read WATT from meter")
     print("")
-    print("       Version 0.1.0 ")
+    print("       Version 0.1.1 ")
 
 
 #########################################
 # Operation function
 def readwatt():
-    w = METER.GetPowermeterWatts()
-    print("Current WATT: " + str(w))
+    try:
+        w = METER.GetPowermeterWatts()
+        print("Current WATT: " + str(w))
+    except Exception as e:
+        logging.error("ERROR DURING READING")
+        logging.error(str(e))
 
 def command_line_argument():
     if len (sys.argv) == 1:
         print ("")
         print ("Error: First command line argument missing.")
-        mwcan_commands()
+        meter_commands()
         error = 1
         return
     
@@ -71,7 +86,7 @@ def command_line_argument():
     else:
         print("")
         print("Unknown first argument '" + sys.argv[1] + "'")
-        mwcan_commands()
+        meter_commands()
         error = 1
         return
 
