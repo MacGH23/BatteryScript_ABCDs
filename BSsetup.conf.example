@@ -21,10 +21,9 @@ i_changed_my_config       = 0
 # ERROR      40
 # WARNING    30
 # INFO       20
-# VERBOSE    15 this is to get deteiled output of the script, but not from the classes
+# VERBOSE    15 this is to get detailed output of the script, but not from the classes
 # DEBUG      10
 # NOTSET      0
-#Loglevel is for Script itself
 loglevel                  = 20
 logpath                   = /home/pi/bs.log
 logtoconsole              = 1
@@ -74,7 +73,7 @@ WSipadr =
 # Software  = 1 #not fully implemented 
 # JKBMS     = 2
 Selected_BMS = 0
-#Discharge until ..., -1 = Don't check BMS SOC Level at all, let BMS/Voltage controll the stoping
+#Discharge until ..., -1 = Don't check BMS SOC Level at all, let BMS/Voltage control the stoping
 #Check if your BMS SOC Value matches the real SOC, otherwise use only Voltages
 BMSminSOC = 0
 #When the charger stoped charing because of BMSminSOC, 
@@ -102,11 +101,13 @@ EstBatteryWh = 0
 
 ##########################################################################
 # Measurements for calculating Dis-Charge power average of power event (smooth the power outpot)
-#0=forbidden ;-)
-#1=just use the actual power value
-#2=average of 2 power events
-#3=...
-powercalccount = 8
+# You can specify for Charger and DisCharger seperatly if you like
+# 0=forbidden ;-)
+# 1=just use the actual power value
+# 2=average of 2 power events
+# 3=...
+ChargerPowerCalcCount    = 8
+DisChargerPowerCalcCount = 8
 
 # Select the method to control the charger / discharger
 # see "def process_power(val)" --> in the script !!
@@ -151,7 +152,7 @@ GetPowerOption  = 0
 # 4 = Shelly TASMOTA
 # 5 = Shelly SHRDZM
 # 6 = Shelly EMLOG
-# 7 = Shelly IOBROKER SIMPLE API
+# 7 = IOBROKER SIMPLE REST API
 # 8 = NOT implemented now ! Shelly HOMEASSISTANT 
 # 9 = Shelly VZLOGGER
 http_get_option       = 7
@@ -187,6 +188,10 @@ mqttpublishWATT     = Battery/Status/Watt
 mqttpublishSOC      = Battery/Status/BatterySOC
 mqttpublishBatVolt  = Battery/Status/BatteryVoltage
 
+#mqttPublish of mqttpublishWATT only of above +/- value to broker
+#0 = disable (mainly for BIC2200 with always on)
+mqttpublishWATTCut     = 0
+
 
 ##########################################################################
 #### ( D I S ) - C H A R G E R - C O N F I G #############################
@@ -212,7 +217,8 @@ MaxDisChargeWATT           =   570
 MinDisChargeWATT           =    28  
 
 #LastInverterPower hyteresis, dont change the output if new value in this range (+ and -)
-LastDisChargePower_delta   =    15  
+#Should be the same as ZeroDeltaDisChargeWATT to have most effect
+LastDisChargePower_delta   =    15
 
 #Reduce x Watt from Discharger output to prevent output to GRID 
 ZeroDeltaDisChargeWATT     =    15  
@@ -223,14 +229,18 @@ ZeroDeltaChargerWatt       =    0
 
 # How much Meter changes count before change output
 # #### IMPORTANT FOR MEANWELL ####
-# Important since meanwell are limited to power changes to 4.000.000 writes
+# Important since Meanwell are limited to power changes to 4.000.000 writes
 # 4.000.000 / 10 (years) / 365 (days) / 8 (hours sun) / 60 (min) = 2,3 changes / min for 10 year
 # 60 / 2,3 = every 26 seconds.
+# For NPB is a newer foirmware available where you can disable this (from 02/2024)
+# Just try to set Bit 10 of systemconfig. If writebale you can disable it
 # since there will be no changes if the same value (in the range above) or max value, 
 # I guess every 15 seconds should be OK for min. 10 years for NPB Charger -> 15Sec/2powerrequests = 7,5 = 8
 # For BIC2200 you should use a higher value, min 30sec. /2 = 15
 # METER should not update more than 2 seconds, please adjust the value accordingliy ! 
-MeterUpdateCounter = 8
+# You can specify for charge and discharge sperately, can also be the same value
+MeterUpdateChargeCounter    = 8
+MeterUpdateDisChargeCounter = 8
 
 
 ##########################################################################
@@ -292,7 +302,7 @@ CellvoltageMaxRestart  = 331
 #Min cell voltage for caculation of min Battery voltage (e.g. 8*305 = 2440 = 24,40V) 
 #mainly done via BMS SOC check but normally not very exact. 
 #you should use the voltage as better indicator 
-#Common is 3,01V, MIN is 2,50V ! 
+#e.g. Common is 3,01V, MIN is 2,50V ! 
 CellvoltageMin         = 305
 
 #Restart cell voltage for restart the discharging (e.g. 8*313 = 2504 = 25,04V) 
@@ -319,7 +329,7 @@ StopMinChargeCurrent          =  100
 
 #Current *100
 #Can be the minmum of the device or a higher value 
-MinDisChargeCurrent       =   90  
+MinDisChargeCurrent       =   90
 
 #Current *100
 #Can be the maximum of the device or a lower value 
@@ -348,6 +358,8 @@ Voltage_ACIN_correction     =   -9
 #Measure the outputvoltage of the MW Device with a good multimeter
 #Discharge is not so critical as long as you do not specify absolut minimum
 #Chargevoltage should be correct as good as can be. Otherwise to high or too low voltage used
+#This values only apply to the Dis-/Charger Set settings, not the reading of the voltage value from the device !
+#If you use the MW for DC reading you have to adjust the min/max Cellvoltage[...] value if needed !
 MW_ChargeVoltCorr    = 0
 MW_DisChargeVoltCorr = 0
 
@@ -363,5 +375,6 @@ BIC2200_efficacy_factor = 93
 
 # Meanwell counter for changes. READ ONLY !!
 MW_NPB_COUNTER = 0
+MW_NPB_COUNTER_LAST = 0
 MW_BIC_COUNTER = 0
-
+MW_BIC_COUNTER_LAST = 0
