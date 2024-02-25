@@ -828,7 +828,7 @@ def mqttpublish(cleanup=0):
         if(cleanup == 1): lwatt = 0
         else: lwatt = status.LastWattValueUsedinDevice
         if(cfg.mqttpublishWATTCut > 0):
-            if(abs(lwatt) > cfg.mqttpublishWATTCut):
+            if(abs(lwatt) <= cfg.mqttpublishWATTCut):
                  lwatt = 0
         
         if (cfg.mqttpublishWATT     != ""): mqttclient.publish(cfg.mqttpublishWATT,     payload=lwatt, qos=1, retain=True)
