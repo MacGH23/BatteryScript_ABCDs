@@ -2,6 +2,9 @@
 # Change to 1 if you setup everything and accept the discalaimer
 # THERE IS NO GURANTEE FOR AN ERROR FREE EXECUTION
 # YOU TAKE THE 100% RISK IF YOU USE THIS SCRIPT !!!
+# THE AUTHOR IS NOT LIABLE FOR ANY DAMAGE !!
+# YOU HAVE BEEN WARNED !
+# BATTERIES CAN BE DANGEROUS! BE SURE YOU KNOW WHAT YOU ARE DOING !!
 #
 # ONLY FOR USE WITH LIFEPO4 CELLS !!! 
 # BATTERIES CAN BE DANGEROUS      !!! 
@@ -81,6 +84,11 @@ BMSminSOC = 0
 #If you don't want to use it, set to 0 !
 BMSRestartSOC = 3
 bms_device = /dev/ttyAMA0
+
+#Max Temperature for BMS
+BMS_MaxTempMosFet = 0
+BMS_MaxTemp1      = 0
+BMS_MaxTemp2      = 0
 
 ### Battery DC voltage read ##############################################################
 # Which device should be used for Batetry DC Voltage read
@@ -192,7 +200,6 @@ mqttpublishBatVolt  = Battery/Status/BatteryVoltage
 #0 = disable (mainly for BIC2200 with always on)
 mqttpublishWATTCut     = 0
 
-
 ##########################################################################
 #### ( D I S ) - C H A R G E R - C O N F I G #############################
 ##########################################################################
@@ -202,9 +209,6 @@ MinChargeWATT              =     0
 
 #Max Watt what the charger can provide, see datasheet
 MaxChargeWATT              =  1000  
-
-#LastInverterPower hyteresis, dont change the output if new value in this range (+ and -)
-LastChargePower_delta      =    20  
 
 #How much Watt the discharger / Inverter can provide.
 #Check for Lumentree what is the real max output at max set. At 24V the output is lower beause of limited current
@@ -217,15 +221,18 @@ MaxDisChargeWATT           =   570
 MinDisChargeWATT           =    28  
 
 #LastInverterPower hyteresis, dont change the output if new value in this range (+ and -)
+LastDisChargePower_delta   =    15
+
+#Do not take any power from Grid, only PV energy with Min. if Min. > actual power
+#not implemented now
+ZeroDeltaChargerWatt       =    0
+
+#LastInverterPower hyteresis, dont change the output if new value in this range (+ and -)
 #Should be the same as ZeroDeltaDisChargeWATT to have most effect
 LastDisChargePower_delta   =    15
 
 #Reduce x Watt from Discharger output to prevent output to GRID 
-ZeroDeltaDisChargeWATT     =    15  
-
-#Allow take power the from grid to charge with Min. if Min. > actual power
-#not implemented now
-ZeroDeltaChargerWatt       =    0
+ZeroDeltaDisChargeWATT     =    15
 
 # How much Meter changes count before change output
 # #### IMPORTANT FOR MEANWELL ####
@@ -252,7 +259,11 @@ MeterUpdateDisChargeCounter = 8
 # 570W = 570
 lt_foreceoffonstartup    = 0
 #Max. Efficacy Factor in % of the Lumentree (datasheet), needed for Ah calculation 
+#Check with your setup if this match and adjust if needed
 lt_efficacy_factor = 90
+
+#Max Temperature for the device (for all the same). If Temp > MaxTemp = Stop
+lt_MaxTemp = 0
 
 #How much Lumentree devices you have installed. Max is 3
 lt_count    = 1
@@ -282,10 +293,10 @@ lt3_maxwatt = 0
 #Specify then the exact current and voltage you want to use 
 
 #How much Cells do you have in your Battery  
-CellCount              = 8
+CellCount              = 1
 
-#How much AH has each Cell, needed for calulation of Battery state  
-CellAH                 = 280
+#How much AH has each Cell, needed for calulation of Battery state
+CellAH                 = 100
 
 #Max cell voltage for caculation of max battery Chargevoltage (e.g. 8 cells * 3,45V = 27,60 --> 8 * 345 = 2760) 
 #Max voltage for charing the battery
@@ -353,6 +364,10 @@ USEDID = 03
 #Voltage in from Grid correction, NPB hat +/- 10V, you should check it with voltmeter and set the diffrence (with "-" if negative)
 Voltage_ACIN_correction     =   -9  
 
+#Max Temperature for the device. If Temp > MaxTemp = Stop
+MW_BIC2200_MaxTemp = 0
+MW_NPB_MaxTemp     = 0
+
 #Voltage correction for Charge and DisCharge voltage in *100
 #MW has +/- 0,24V specified
 #Measure the outputvoltage of the MW Device with a good multimeter
@@ -360,8 +375,9 @@ Voltage_ACIN_correction     =   -9
 #Chargevoltage should be correct as good as can be. Otherwise to high or too low voltage used
 #This values only apply to the Dis-/Charger Set settings, not the reading of the voltage value from the device !
 #If you use the MW for DC reading you have to adjust the min/max Cellvoltage[...] value if needed !
-MW_ChargeVoltCorr    = 0
-MW_DisChargeVoltCorr = 0
+MW_NPB_ChargeVoltCorr    = 0
+MW_BIC_ChargeVoltCorr    = 0
+MW_BIC_DisChargeVoltCorr = 0
 
 #Do not switch the BIC on/off during Charging / DisCharging. Only switch direction
 #be carefull !! This can cause a overcharge problem if the CellvoltageMax is set too high (max 345 !)
@@ -370,7 +386,8 @@ MW_DisChargeVoltCorr = 0
 ForceBicAlwaysOn = 0
 
 #Max. Efficacy Factor in % of the BIC2000 DisCharger mode (datasheet), needed for Ah calculation 
-BIC2200_efficacy_factor = 93
+#Check with your setup if this match and adjust if needed
+BIC2200_efficacy_factor = 95
 
 
 # Meanwell counter for changes. READ ONLY !!

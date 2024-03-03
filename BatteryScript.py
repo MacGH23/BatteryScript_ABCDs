@@ -31,6 +31,7 @@
 # macGH 14.02.2024  Version 0.1.9: fixed BIC-2200 DisCharger function
 # macGH 15.02.2024  Version 0.2.0: added mw Voltage correction
 # macGH 25.02.2024  Version 0.2.1: Improved BIC-2200 handling for always on
+# macGH 03.02.2024  Version 0.2.2: Fixed some bugs. Start adding Temperature checks
 
 import os
 import sys
@@ -137,7 +138,7 @@ class WS(BaseHTTPRequestHandler):
                 content = content + self._gettableentry(attr,value)
                 
             content = self._beginhtml(message,-1,'/config') + \
-                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;">'+ \
+                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;font-size:1.5vw;">'+ \
                       '<tbody>'+ \
                       content + \
                       '</tbody>' + \
@@ -153,7 +154,7 @@ class WS(BaseHTTPRequestHandler):
                 content = content + self._gettableentry(attr,value)
                 
             content = self._beginhtml(message,30,'/bms') + \
-                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;">'+ \
+                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;font-size:1.5vw;">'+ \
                       '<tbody>'+ \
                       content + \
                       '</tbody>' + \
@@ -169,7 +170,7 @@ class WS(BaseHTTPRequestHandler):
                       self._gettableentry('Shutdown',status.WebRebootSDcounter)
                 
             content = self._beginhtml(message,-1,'/system') + \
-                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;">'+ \
+                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;font-size:1.5vw;">'+ \
                       '<tbody>'+ \
                       content + \
                       '</tbody>' + \
@@ -180,7 +181,7 @@ class WS(BaseHTTPRequestHandler):
 
         def _statushtml(self, message):
             content = self._beginhtml(str(message),30,'/') + \
-                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;">\n'+ \
+                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;font-size:1.5vw;">\n'+ \
                       '<tbody>\n'+ \
                       self._gettableentry('CurrentWattValue',status.CurrentWattValue) + \
                       self._gettableentry('CurrentTotalWatt',status.CurrentTotalWatt) + \
@@ -448,9 +449,12 @@ class chargerconfig:
             self.USEDID                    =  updater["Setup"]["USEDID"].value
             self.ForceBicAlwaysOn          =  int(updater["Setup"]["ForceBicAlwaysOn"].value)
             self.BIC2200_efficacy_factor   =  int(updater["Setup"]["BIC2200_efficacy_factor"].value)
-            self.MW_ChargeVoltCorr         =  int(updater["Setup"]["MW_ChargeVoltCorr"].value)
-            self.MW_DisChargeVoltCorr      =  int(updater["Setup"]["MW_DisChargeVoltCorr"].value)
-            
+            self.MW_NPB_ChargeVoltCorr     =  int(updater["Setup"]["MW_NPB_ChargeVoltCorr"].value)
+            self.MW_BIC_ChargeVoltCorr     =  int(updater["Setup"]["MW_BIC_ChargeVoltCorr"].value)
+            self.MW_BIC_DisChargeVoltCorr  =  int(updater["Setup"]["MW_BIC_DisChargeVoltCorr"].value)
+            self.MW_BIC2200_MaxTemp        =  int(updater["Setup"]["MW_BIC2200_MaxTemp"].value)
+            self.MW_NPB_MaxTemp            =  int(updater["Setup"]["MW_NPB_MaxTemp"].value)
+
             self.StopOnConnectionLost      =  int(updater["Setup"]["StopOnConnectionLost"].value)
             self.GetPowerOption            =  int(updater["Setup"]["GetPowerOption"].value)
             self.PowerControlmethod        =  int(updater["Setup"]["PowerControlmethod"].value)
@@ -470,6 +474,7 @@ class chargerconfig:
             self.lt_foreceoffonstartup     =  int(updater["Setup"]["lt_foreceoffonstartup"].value)
             self.lt_count                  =  int(updater["Setup"]["lt_count"].value)
             self.lt_efficacy_factor        =  int(updater["Setup"]["lt_efficacy_factor"].value)
+            self.lt_MaxTemp                =  int(updater["Setup"]["lt_MaxTemp"].value)
     
             self.lt1_device                =  updater["Setup"]["lt1_device"].value
             self.lt1_address               =  int(updater["Setup"]["lt1_address"].value)
@@ -498,6 +503,9 @@ class chargerconfig:
             self.bms_device                =  updater["Setup"]["bms_device"].value
             self.BMSminSOC                 =  int(updater["Setup"]["BMSminSOC"].value)
             self.BMSRestartSOC             =  int(updater["Setup"]["BMSRestartSOC"].value)
+            self.BMS_MaxTempMosFet         =  int(updater["Setup"]["BMS_MaxTempMosFet"].value)
+            self.BMS_MaxTemp1              =  int(updater["Setup"]["BMS_MaxTemp1"].value)
+            self.BMS_MaxTemp2              =  int(updater["Setup"]["BMS_MaxTemp2"].value)
     
             self.Selected_LCD              =  int(updater["Setup"]["Selected_LCD"].value)
             self.lcdi2cadr                 =  int(updater["Setup"]["lcdi2cadr"].value)
@@ -572,12 +580,17 @@ class chargerconfig:
             mylogs.info("USEDID:                      " + str(self.USEDID))
             mylogs.info("MW_NPB_COUNTER:              " + str(self.MW_NPB_COUNTER))
             mylogs.info("MW_BIC_COUNTER:              " + str(self.MW_BIC_COUNTER))
-            mylogs.info("MW_ChargeVoltCorr:           " + str(self.MW_ChargeVoltCorr))
-            mylogs.info("MW_DisChargeVoltCorr:        " + str(self.MW_DisChargeVoltCorr))
+            mylogs.info("MW_NPB_ChargeVoltCorr:       " + str(self.MW_NPB_ChargeVoltCorr))
+            mylogs.info("MW_BIC_ChargeVoltCorr:       " + str(self.MW_BIC_ChargeVoltCorr))
+            mylogs.info("MW_BIC_DisChargeVoltCorr:    " + str(self.MW_BIC_DisChargeVoltCorr))
+            mylogs.info("MW_BIC2200_MaxTemp:          " + str(self.MW_BIC2200_MaxTemp))
+            mylogs.info("MW_NPB_MaxTemp:              " + str(self.MW_NPB_MaxTemp))
     
             mylogs.info("-- Lumentree --             ")
             mylogs.info("Lumentree efficacy_factor   " + str(self.lt_efficacy_factor))
             mylogs.info("Lumentree Count             " + str(self.lt_count))
+            mylogs.info("Lumentree lt_MaxTemp        " + str(self.lt_MaxTemp))
+
             mylogs.info("Lumentree device  1         " + self.lt1_device)
             mylogs.info("Lumentree address 1         " + str(self.lt1_address))
             mylogs.info("Lumentree device  2         " + self.lt2_device)
@@ -602,6 +615,9 @@ class chargerconfig:
             mylogs.info("bms_device:                 " + str(self.bms_device))
             mylogs.info("BMSminSOC:                  " + str(self.BMSminSOC))
             mylogs.info("BMSRestartSOC:              " + str(self.BMSRestartSOC))
+            mylogs.info("BMS_MaxTempMosFet:          " + str(self.BMS_MaxTempMosFet))
+            mylogs.info("BMS_MaxTemp1:               " + str(self.BMS_MaxTemp1))
+            mylogs.info("BMS_MaxTemp2:               " + str(self.BMS_MaxTemp2))
     
             mylogs.info("-- LCD --                   ")
             mylogs.info("Selected_LCD:               " + str(self.Selected_LCD))
@@ -772,7 +788,9 @@ def gpio_callback(channel):
                 status.DisChargerEnabled = 1
             
         if (channel == cfg.gpio2):
-            mylogs.info("GPIO CALLBACK 2 - Nothing to do here")
+            mylogs.info("GPIO CALLBACK 2 - ReInit CLCD")
+            display = i2clcd(cfg.lcdi2cadr)
+            display.lcd_clear()
     
         if (channel == cfg.gpio3):
             mylogs.info("GPIO CALLBACK 3 - Nothing to do here")
@@ -936,6 +954,11 @@ def StartStopOperationCharger(val,force=0):
         mylogs.verbose("StartStopOperationCharger: Always on BIC Mode already set to Discharge. Nothing to do here")
         return
     
+    #if the Battery is not totally empty anymore, start Discharging
+    if((status.BatteryEMPTY == 1) and (status.BatteryVoltage >= cfg.RestartDisChargevoltage)):
+        mylogs.info("StartStopOperationCharger: Battery Discharging allowed again. Current Volatge: " + str(status.BatteryVoltage/100) + " (Restart Voltage: " + str(cfg.RestartDisChargevoltage/100) + ")")
+        status.BatteryEMPTY = 0
+
     #if the Battery is not full anymore, start recharging
     if((status.BatteryFULL == 1) and (status.BatteryVoltage <= cfg.RestartChargevoltage)):
         mylogs.info("StartStopOperationCharger: Battery charging allowed again. Current Volatge: " + str(status.BatteryVoltage/100) + " (Restart Voltage: " + str(cfg.RestartChargevoltage/100) + ")")
@@ -947,6 +970,8 @@ def StartStopOperationCharger(val,force=0):
         status.BatteryFULL = 1
         #BatterFullSpecialOperation(1)
         force = 2 #force stop charging, 2 if BIC is used with always on
+        #Set to est. max of installed battery
+        #status.EstBatteryWh = cfg.BatteryTotalWH
 
     if(status.BatteryFULL == 1):
         mylogs.info("StartStopOperationCharger: Battery Full ! - Charging current too small: " + str(status.LastChargerGetCurrent) + " - Min: " + str(cfg.StopMinChargeCurrent))
@@ -961,7 +986,7 @@ def StartStopOperationCharger(val,force=0):
         p = abs(status.LastWattValueUsedinDevice - val)
     
         if ((val != 0) and (p <= cfg.LastChargePower_delta)):
-            mylogs.verbose("No change to Charger output, Delta is: " + str(p) + "  - Set to :" + str(cfg.LastChargePower_delta))
+            mylogs.info("No change to Charger output, Delta is: " + str(p) + "  - Set to :" + str(cfg.LastChargePower_delta))
             return
 
     if(force==0): 
@@ -992,6 +1017,12 @@ def StartStopOperationDisCharger(val,force=0):
     if((cfg.ForceBicAlwaysOn == 1) and (status.BICChargeDisChargeMode == 0) and (val == 0) and (force == 0)):
         mylogs.verbose("StartStopOperationDisCharger: Always on BIC Mode already set to Charge. Nothing to do here")
         return
+
+    #if the Battery is not full anymore, start recharging
+    if((status.BatteryFULL == 1) and (status.BatteryVoltage <= cfg.RestartChargevoltage)):
+        mylogs.info("StartStopOperationDisCharger: Battery charging allowed again. Current Volatge: " + str(status.BatteryVoltage/100) + " (Restart Voltage: " + str(cfg.RestartChargevoltage/100) + ")")
+        #BatterFullSpecialOperation(0)
+        status.BatteryFULL = 0
 
     #if the Battery is not totally empty anymore, start Discharging
     if((status.BatteryEMPTY == 1) and (status.BatteryVoltage >= cfg.RestartDisChargevoltage) and (status.BMSSOC >=cfg.BMSRestartSOC)):
@@ -1078,6 +1109,7 @@ def StartStopOperationMeanwell(val, CD, force=0):
                 mwcandev.operation(1,0)
                 mylogs.verbose("Meanwell: Operation mode set to: OFF")
                 MW_EEPROM_Counter_INC(CD)
+                sleep(0.3)
             else:
                 mylogs.verbose("Meanwell: Operation mode already OFF")
         else:
@@ -1085,6 +1117,7 @@ def StartStopOperationMeanwell(val, CD, force=0):
                 mwcandev.operation(1,1)   
                 mylogs.verbose("Meanwell: Operation mode set to: ON")
                 MW_EEPROM_Counter_INC(CD)
+                sleep(0.3)
             else:
                 mylogs.verbose("Meanwell: Operation mode already ON")
 
@@ -1092,24 +1125,6 @@ def StartStopOperationMeanwell(val, CD, force=0):
         mylogs.error("StartStopOperationMeanwell: EXEPTION !")
         mylogs.error(str(e))
         mwcandev.can0.flush_tx_buffer() #flush buffer to clear message queue
-    
-#    if (val == 0):  
-#        if (status.ChargerStatus != 0):
-#            mwcandev.operation(1,0)
-#            status.ChargerStatus = 0
-#            status.ZeroImportWatt = 0   
-#            mylogs.debug("Meanwell: Operation mode set to: OFF")
-#            cfg.MW_EEPROM_COUNTER += 1
-#        else:
-#            mylogs.debug("Meanwell: Operation mode already OFF")
-#    else:
-#        if (status.ChargerStatus != 1):
-#            mwcandev.operation(1,1)   
-#            status.ChargerStatus = 1   
-#            mylogs.debug("Meanwell: Operation mode set to: ON")
-#            cfg.MW_EEPROM_COUNTER += 1
-#        else:
-#            mylogs.debug("Meanwell: Operation mode already ON")
    
     return val
 
@@ -1128,7 +1143,7 @@ def Charger_Meanwell_Set(val,force=0):
             if(status.BICChargeDisChargeMode==1):
                 mylogs.info("Charger_Meanwell_Set: Set BIC2200 to Charge Mode")
                 mwcandev.BIC_chargemode(1,0)  #set BIC to Chargemode
-                sleep(0.2)
+                sleep(0.3)
                 status.BICChargeDisChargeMode = mwcandev.BIC_chargemode(0,0)
                 MW_EEPROM_Counter_INC(0)
 
@@ -1172,6 +1187,7 @@ def Charger_Meanwell_Set(val,force=0):
                         mylogs.info("Charger_Meanwell_Set: BIC-2200 SET IntCurrent = 0")
                         c = mwcandev.i_out_set(1,IntCurrent)
                         MW_EEPROM_Counter_INC(0)
+                        sleep(0.4)
                     else:
                         mylogs.info("Charger_Meanwell_Set: IntCurrent = 0 - Do not set -> Device will be set to OFF")
                         
@@ -1187,6 +1203,7 @@ def Charger_Meanwell_Set(val,force=0):
                         status.LastChargerSetCurrent = IntCurrent;
                         MW_EEPROM_Counter_INC(0)
                         OPStart = True #device start or continue
+                        sleep(0.4)
                         
                 status.actchargercounter = 1 #Reset counter to 1
             else:
@@ -1225,7 +1242,7 @@ def Charger_Meanwell_Set(val,force=0):
 
         #wait to read the current after MW starts to get a value != 0
         #if 0 returns Battery is full, checked in StartStopCharger
-        sleep(0.6)
+        sleep(0.2)
         status.LastChargerGetCurrent  = mwcandev.i_out_read()
         NewVal = int((status.LastChargerGetCurrent*vout)/10000)
         mylogs.info("Charger_Meanwell_Set: BVout:" + str(vout/100) + ":V: Iout:" + str(status.LastChargerGetCurrent/100) + ":A: ICalc:" + str(IntCurrent/100) + ":A: ILastSet:" + str(status.LastChargerSetCurrent/100) + ":A - GET ACT: " + str(NewVal) + "W  (C:" + str(status.actchargercounter) + "-" + str(cfg.MeterUpdateChargeCounter) + ")")
@@ -1254,7 +1271,7 @@ def DisCharger_BIC2200_Set(val,force=0):
         if(status.BICChargeDisChargeMode==0):
             mylogs.info("StartStopOperationDisCharger: Set BIC2200 to DisCharge Mode")
             mwcandev.BIC_chargemode(1,1)  #set BIC to DisChargemode
-            sleep(0.2)
+            sleep(0.3)
             status.BICChargeDisChargeMode = mwcandev.BIC_chargemode(0,0)
             MW_EEPROM_Counter_INC(1)
 
@@ -1282,9 +1299,14 @@ def DisCharger_BIC2200_Set(val,force=0):
         #Stop if this value is reached or allow take power from grid to charge 
         if (IntCurrent <= cfg.MinDisChargeCurrent):
             if (IntCurrent < (cfg.MinDisChargeCurrent - ZeroDelta)):
-                mylogs.info("Meanwell BIC: Current too small - " + str(IntCurrent) + " - MinCurrent: " + str(cfg.MinDisChargeCurrent) + " - ZeroDelta: " + str(ZeroDelta)+ " -> Device OFF")
-                IntCurrent = 0;
-                OPStart = False 
+                if(cfg.ForceBicAlwaysOn == 1): #BIC set to Min
+                    IntCurrent = cfg.MinDisChargeCurrent
+                    mylogs.info("Meanwell BIC: Current too small - " + str(IntCurrent) + " - MinCurrent: " + str(cfg.MinDisChargeCurrent) + " - ZeroDelta: " + str(ZeroDelta)+ " -> Always ON")
+                    OPStart = True
+                else:
+                    IntCurrent = 0;
+                    mylogs.info("Meanwell BIC: Current too small - " + str(IntCurrent) + " - MinCurrent: " + str(cfg.MinDisChargeCurrent) + " - ZeroDelta: " + str(ZeroDelta)+ " -> Device OFF")
+                    OPStart = False 
             else:
                 IntCurrent = cfg.MinDisChargeCurrent
                 status.ZeroImportWatt = cfg.ZeroDeltaChargerWatt
@@ -1297,6 +1319,7 @@ def DisCharger_BIC2200_Set(val,force=0):
                 status.LastDisChargerCurrent = IntCurrent;
                 MW_EEPROM_Counter_INC(1)
                 status.actchargercounter = 1 #Reset counter to 1 
+                sleep(0.4) #wait for next read
             else:
                 mylogs.info("Meanwell BIC: Wait for next change: " + str(status.actchargercounter) + "  of: " + str(cfg.MeterUpdateDisChargeCounter))
                 status.actchargercounter += 1
@@ -1316,7 +1339,7 @@ def DisCharger_BIC2200_Set(val,force=0):
     #        status.ZeroExportWatt = 0
             StartStopOperationMeanwell(0,1,force)     
 
-        sleep(0.6)
+        sleep(0.2)
         iout  = mwcandev.i_out_read()
         NewVal = int((iout*vout)/-10000)
 
@@ -1564,7 +1587,7 @@ def CalcBatteryWh():
     Bat_mWh = LastWatt_mWh * diff 
     status.EstBatteryWh = status.EstBatteryWh + Bat_mWh
     status.LastMeterTime = now
-    mylogs.verbose("CalcBatteryWh: LastWatt_mWh :" + str(round(LastWatt_mWh,2)) + " - Bat_mAH: " + str(round(Bat_mWh,2)) + " - EF: " + str(EF) + " - TimeDiff: " + str(round(diff,2)))
+    mylogs.info("CalcBatteryWh: LastWatt_mWh :" + str(round(LastWatt_mWh,2)) + " - Bat_mAH: " + str(round(Bat_mWh,2)) + " - EF: " + str(EF) + " - TimeDiff: " + str(round(diff,2)))
 
 #####################################################################
 #calculate the output power by array
@@ -1657,8 +1680,8 @@ def process_power(power):
     if (cfg.PowerControlmethod == 1):
         mylogs.debug("PowerControlmethod: 1 - Universal mode")
         
-        if (status.ZeroImportWatt > 0):      #charger take small power from Grid for charging, check if still valid
-            if((NewPower - status.ZeroImportWatt) > cfg.ZeroDeltaChargerWatt):
+        if (status.ZeroImportWatt > 0):      #charger aviod to take from Grid for charging, check if still valid
+            if((NewPower + status.ZeroImportWatt) > cfg.ZeroDeltaChargerWatt):
                 status.ZeroImportWatt = 0   #too much delta, reset and use normal way
             else:
                 mylogs.verbose("ChargeMethod: 1 with ZeroImport")
@@ -1825,13 +1848,20 @@ cfg     = chargerconfig()
 #put it into status class for easier status info for webserver
 status.EstBatteryWh = cfg.EstBatteryWh
 
+print("######################################################")
+print("# THERE IS NO GURANTEE FOR AN ERROR FREE EXECUTION   #")
+print("# YOU TAKE THE TOTAL RISK IF YOU USE THIS SCRIPT !!! #")
+print("# ONLY FOR USE WITH LIFEPO4 CELLS !!!                #")
+print("# BATTERIES CAN BE DANGEROUS !!!                     #")
+print("# BE SURE YOU KNOW WHAT YOU ARE DOING !!             #")
+print("# THE AUTHOR(S) IS NOT LIABLE FOR ANY DAMAGE !!      #")
+print("# YOU HAVE BEEN WARNED !                             #")
+print("######################################################")
+
 if (cfg.i_changed_my_config == 0):
     print("PLEASE SET UP YOUR DEVICE IN BSsetup.conf !!")
-    print("THERE IS NO GURANTEE FOR AN ERROR FREE EXECUTION")
-    print("YOU TAKE THE TOTAL RISK IF YOU USE THIS SCRIPT !!!")
-    print("ONLY FOR USE WITH LIFEPO4 CELLS !!!")
-    print("BATTERIES CAN BE DANGEROUS !!!")
     print("CHECK ALL PARAMETERS CAREFULLY !!!")
+    print("BY SETTING TO 1 YOU ACCEPT THE USING THIS SCRIPT AT YOUR OWN RISK")
     sys.exit()
 
 
@@ -1921,8 +1951,9 @@ if (cfg.Selected_Device_Charger <=1):
     #Meanwell BIC-2200 specific
     if (cfg.Selected_Device_Charger==0):
         #setup Bic2200
-        #set to charge mode first
+        MW_ChargeVoltCorr = cfg.MW_BIC_ChargeVoltCorr
 
+        #set to charge mode first
         sc  = mwcandev.system_config(0,0)
         bic = mwcandev.BIC_bidirectional_config(0,0)
         mylogs.debug("BIC SystemConfig: " + str(sc) + " BiDirectionalConfig: " + str(bic))
@@ -1945,8 +1976,8 @@ if (cfg.Selected_Device_Charger <=1):
         status.DisCharger_efficacy_factor = cfg.BIC2200_efficacy_factor
         #set Min Discharge voltage
         rval = mwcandev.BIC_discharge_v(0,0)
-        if(rval != cfg.StopDischargeVoltage  + cfg.MW_DisChargeVoltCorr):
-            mwcandev.BIC_discharge_v(1,cfg.StopDischargeVoltage + cfg.MW_DisChargeVoltCorr)
+        if(rval != cfg.StopDischargeVoltage  + cfg.MW_BIC_DisChargeVoltCorr):
+            mwcandev.BIC_discharge_v(1,cfg.StopDischargeVoltage + cfg.MW_BIC_DisChargeVoltCorr)
             MW_EEPROM_Counter_INC(1)
             mylogs.info("SET DISCHARGE VOLTAGE: " + str(rval))
         else:
@@ -1969,6 +2000,7 @@ if (cfg.Selected_Device_Charger <=1):
     #Meanwell NBP specific
     if (cfg.Selected_Device_Charger==1):
         #setup NPB
+        MW_ChargeVoltCorr = cfg.MW_NPB_ChargeVoltCorr
         sc  = mwcandev.system_config(0,0)
         cuve = mwcandev.NPB_curve_config(0,0,0) #Bit 7 should be 0
         mylogs.debug("NPB SystemConfig: " + str(sc) + " CURVE_CONFIG: " + str(cuve))
@@ -1993,8 +2025,8 @@ if (cfg.Selected_Device_Charger <=1):
 
     #Set fixed charge voltage to device BIC and NPB
     rval = mwcandev.v_out_set(0,0)
-    if(rval != cfg.FixedChargeVoltage + cfg.MW_ChargeVoltCorr):
-        rval = mwcandev.v_out_set(1,cfg.FixedChargeVoltage + cfg.MW_ChargeVoltCorr)
+    if(rval != cfg.FixedChargeVoltage + MW_ChargeVoltCorr):
+        rval = mwcandev.v_out_set(1,cfg.FixedChargeVoltage + MW_ChargeVoltCorr)
         MW_EEPROM_Counter_INC(0)
         mylogs.info("SET CHARGE VOLTAGE: " + str(rval))
     else:
