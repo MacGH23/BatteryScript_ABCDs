@@ -99,7 +99,7 @@ I use an entry in cron to start the BSstart.py<br>
 ```
 crontab -e
 (add at the end:)
-@reboot /home/pi/ABCDs/BSstart.py 11
+@reboot /home/pi/ABCDs/BSstart.py 10
 ```
 Change the path to the right one.
 
