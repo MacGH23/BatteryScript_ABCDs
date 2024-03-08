@@ -86,9 +86,9 @@ BMSRestartSOC = 3
 bms_device = /dev/ttyAMA0
 
 #Max Temperature for BMS
-BMS_MaxTempMosFet = 0
-BMS_MaxTemp1      = 0
-BMS_MaxTemp2      = 0
+BMS_MaxTempMosFet = 35
+BMS_MaxTemp1      = 30
+BMS_MaxTemp2      = 30
 
 ### Battery DC voltage read ##############################################################
 # Which device should be used for Batetry DC Voltage read
@@ -223,7 +223,7 @@ MinDisChargeWATT           =    28
 #LastInverterPower hyteresis, dont change the output if new value in this range (+ and -)
 LastDisChargePower_delta   =    15
 
-#Do not take any power from Grid, only PV energy with Min. if Min. > actual power
+#Do not upload power to Grid, always take (a bit) power from grid
 #not implemented now
 ZeroDeltaChargerWatt       =    0
 
@@ -263,7 +263,7 @@ lt_foreceoffonstartup    = 0
 lt_efficacy_factor = 90
 
 #Max Temperature for the device (for all the same). If Temp > MaxTemp = Stop
-lt_MaxTemp = 0
+lt_MaxTemp = 60
 
 #How much Lumentree devices you have installed. Max is 3
 lt_count    = 1
@@ -296,7 +296,7 @@ lt3_maxwatt = 0
 CellCount              = 1
 
 #How much AH has each Cell, needed for calulation of Battery state
-CellAH                 = 100
+CellAH                 = 10
 
 #Max cell voltage for caculation of max battery Chargevoltage (e.g. 8 cells * 3,45V = 27,60 --> 8 * 345 = 2760) 
 #Max voltage for charing the battery
@@ -324,7 +324,7 @@ CellvoltageMinRestart  = 320
 
 #Current *100 --> 25,0A * 100 = 2500
 #Can be the maximum of the device or a lower value
-MaxChargeCurrent          = 3600  
+MaxChargeCurrent          = 1000  
 
 #Current *100  --> 7,2A * 100 = 720
 #Can be the minmum of the device or a higher value 
@@ -344,7 +344,7 @@ MinDisChargeCurrent       =   90
 
 #Current *100
 #Can be the maximum of the device or a lower value 
-MaxDisChargeCurrent       = 4000  
+MaxDisChargeCurrent       = 1000  
 
 #how much power diffrence is OK
 #not used now
@@ -365,8 +365,8 @@ USEDID = 03
 Voltage_ACIN_correction     =   -9  
 
 #Max Temperature for the device. If Temp > MaxTemp = Stop
-MW_BIC2200_MaxTemp = 0
-MW_NPB_MaxTemp     = 0
+MW_BIC2200_MaxTemp = 60
+MW_NPB_MaxTemp     = 60
 
 #Voltage correction for Charge and DisCharge voltage in *100
 #MW has +/- 0,24V specified
@@ -387,7 +387,7 @@ ForceBicAlwaysOn = 0
 
 #Max. Efficacy Factor in % of the BIC2000 DisCharger mode (datasheet), needed for Ah calculation 
 #Check with your setup if this match and adjust if needed
-BIC2200_efficacy_factor = 95
+BIC2200_efficacy_factor = 93
 
 
 # Meanwell counter for changes. READ ONLY !!

@@ -22,6 +22,8 @@ Here you can have a quick overview of the current status, current config and BMS
 
 *Important Note for Meanwell devices !<br>*
 Changing the output values are limited to 4.000.000 by design.<br>
+The NPB has a newer firmware with an additional option to disable the EEPROM write (from 02/2024 - option will be set if available)<br>
+This can only be updated by Meanwell ! <br>
 Therefore several options are available to configure.<br>
 - ZeroDeltaChargerWatt       =    30 (range in WATT without set device to new value)
 - chargercounter = 8 (wait for change, multiply with METER updates in seconds.)<br>
@@ -30,6 +32,7 @@ e.g. (Meter update all 2 seconds) x (8) = only after 16 seconds an update will b
 **Discharger:**
 * Meanwell BIC-2200<br>
 * Lumentree (by ask4it) 600/1000/2000, upto 3 can be used in parallel<br>
+Sun inverters with Trucki PCB should also work <br>
 * Simulator, can be used for testing
 
 **BMS:**
@@ -40,9 +43,9 @@ To adjust everything automatically, you need to get the current power.<br>
 Positive = Take power from the GRID<br>
 Negative = Get power from PV<br>
 * MQTT (get vlaues from any mqtt broker)
-* Shelly (EM, 3EM, 3EMPro) (not tested)
-* Tasmota (not tested)
-* IOBroker via simple API
+* Shelly (EM, 3EM, 3EMPro)
+* Tasmota
+* IOBroker via simple REST API (install the "RESTful API" adapter)
 * EMLOG (not tested)
 * VZlogger (not tested)
 * Simulator, can be used for testing (random power value)<br>
@@ -78,25 +81,34 @@ All settings can be configured in BSsetup.conf<br>
 All the options are explained or self explaining in detail in the conf file. <br>
 
 Change to executeable by chmod 755 BatteryScript.py<br>
-Run: /.BatteryScript.py
-To run the background tmux can be used.<br>
-Start bach script is "start_tmux.sh" (also chmod it)<br>
+Change to executeable by chmod 755 BSstart.py<br>
+`Run: sudo chmod 755 BatteryScript.py`<br>
+`Run: sudo chmod 755 BSstart.py`<br>
+<br>
+`Run: ./BatteryScript.py`<br>
+To run the background <br>
+`Run: ./BSstart [0..3]`<br>
+Default "0" just starts the script, 1..3 can be definded on your own, 9: show the tmux console"<br>
+For a 10 second delay call BSstart.py with [10..13] (network boot delay)
+ <br>
 
 Run during startup:<br>
 Thee are several ways to start the script automatically.<br>
-I use an entry in cron to start the tmux script<br>
+I use an entry in cron to start the BSstart.py<br>
 
 ```
 crontab -e
 (add at the end:)
-@reboot bash /home/pi/BatteryScript/start_tmux.sh &
+@reboot /home/pi/ABCDs/BSstart.py 11
 ```
 Change the path to the right one.
 
 Since I forget always the command to attach to the tmux window just run (chmod before):<br>
-`./ShowBS.sh` 
-To detach, press CTRL+"B" -> release -> Press "D"
-
+`./ShowBS.sh` <br>
+or<br>
+`./BSstart.py 9` <br>
+To detach, press CTRL+"B" -> release -> Press "D"<br>
+<br>
 **Additional Features**<br>
 GPIO: <br>
 Upto 4 GPIO buttons are already prepared, but you have to implement the action yourself<br>
@@ -109,7 +121,11 @@ Installation: <br>
 Enable i2c with <br>
 `sudo raspi-config -> Interfaces`<br>
 Install python3 smbus lib:<br>
-`sudo apt install python3-smbus`
+`sudo apt install python3-smbus`<br>
+<br>
+Webserver:<br>
+An integrated webserver at port 9000 is implemented to provide information and some interaction like restart, reboot, ... <br>
+`http://[IP_of_Raspi]:9000`<br>
 
 **Installation:<br>**
 Some python lib needed. Please install:<br>
@@ -126,18 +142,20 @@ For the serial communication with Lumentree and BMS the user must be added to di
 Change the file executeable with<br>
 `sudo chmod 755 BatteryScript.py`<br>
 
-For first test just start the script after you configuerd the chager.conf<br>
+For first test just start the script after you configuerd the BSsetup.conf<br>
 `./BatteryScript.py`<br>
 
-To use the script as a service copy the file ABCDS.service to /etc/systemd/system<br>
+To use the script as a service copy the file ABCDS.service to /etc/systemd/system (not well tested now)<br>
 `sudo cp ABCDS.service /etc/systemd/system`<br>
 `sudo systemctl daemon-reload`<br>
 `systemctl start book-scraper`<br>
 
 To start using TMUX you can start_tmux.sh<br>
-`./start_tmux.sh`<br>
+`./BSstart.py 0`<br>
 To connect to Tmux:<br>
 `./ShowBS.sh`<br>
+or<br>
+`./BSstart.py 9`<br>
 <br>
 
 **Meanwell installation hints:<br>**
