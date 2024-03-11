@@ -12,7 +12,10 @@ Should work on any Raspberry Pi. <br>
 
 **Status Webserver:<br>**
 For a better overview a own webserver at port 9000 is available (can be configured in conf file).<br>
-Here you can have a quick overview of the current status, current config and BMS. <br> You can also enable and disable Charger and DisCharger
+Here you can have a quick overview of the current status, current config and BMS. <br> You can also enable and disable Charger and DisCharger<br>
+For automation you can call a restart (see below BSstart.py) via URL:<br>
+`[IP:PORT]/DIRECTRESTART[x] `<br>
+x = 0..3
 
 **Current supported hardware:<br>**
 **Charger:**
@@ -85,12 +88,23 @@ Change to executeable by chmod 755 BSstart.py<br>
 `Run: sudo chmod 755 BatteryScript.py`<br>
 `Run: sudo chmod 755 BSstart.py`<br>
 <br>
-`Run: ./BatteryScript.py`<br>
-To run the background <br>
-`Run: ./BSstart [0..3]`<br>
-Default "0" just starts the script, 1..3 can be definded on your own, 9: show the tmux console"<br>
+For first test just start the script after you configuerd the BSsetup.conf<br>
+`./BatteryScript.py`<br>
+
+
+To start using TMUX you can ./BSstart.py 0<br>
+`./BSstart.py 0`<br><br>
+Since I forget always the command to attach to the tmux window just call:<br>
+`./ShowBS.sh`<br>
+or<br>
+`./BSstart.py 9`<br>
+To detach, press CTRL+"B" -> release -> Press "D"<br>
+
+`Options for BSstart [0..3,9]`<br>
+Default "0" just starts the script,<br>
+1..3 can be definded on your own<br>
+9: show the tmux console"<br>
 For a 10 second delay call BSstart.py with [10..13] (network boot delay)
- <br>
 
 Run during startup:<br>
 Thee are several ways to start the script automatically.<br>
@@ -101,14 +115,9 @@ crontab -e
 (add at the end:)
 @reboot /home/pi/ABCDs/BSstart.py 10
 ```
-Change the path to the right one.
+Change the path to the right one.<br>
+Use 10 as argument to be sure that network is up.
 
-Since I forget always the command to attach to the tmux window just run (chmod before):<br>
-`./ShowBS.sh` <br>
-or<br>
-`./BSstart.py 9` <br>
-To detach, press CTRL+"B" -> release -> Press "D"<br>
-<br>
 **Additional Features**<br>
 GPIO: <br>
 Upto 4 GPIO buttons are already prepared, but you have to implement the action yourself<br>
@@ -134,29 +143,18 @@ Some python lib needed. Please install:<br>
 `pip3 install ifcfg`<br>
 `pip3 install minimalmodbus`<br>
 `pip3 install configupdater`<br>
-`pip3 install psutil`<br><br>
+`pip3 install psutil`<br>
+
+Install Tmux<br>
+`sudo apt install tmux`<br>
 
 For the serial communication with Lumentree and BMS the user must be added to dialout group<br>
 `sudo usermod -a -G tty $USER`<br>
 
-Change the file executeable with<br>
-`sudo chmod 755 BatteryScript.py`<br>
-
-For first test just start the script after you configuerd the BSsetup.conf<br>
-`./BatteryScript.py`<br>
-
-To use the script as a service copy the file ABCDS.service to /etc/systemd/system (not well tested now)<br>
+To use the script as a service copy the file ABCDS.service to /etc/systemd/system (not well tested now, tmux is recommended)<br>
 `sudo cp ABCDS.service /etc/systemd/system`<br>
 `sudo systemctl daemon-reload`<br>
-`systemctl start book-scraper`<br>
-
-To start using TMUX you can start_tmux.sh<br>
-`./BSstart.py 0`<br>
-To connect to Tmux:<br>
-`./ShowBS.sh`<br>
-or<br>
-`./BSstart.py 9`<br>
-<br>
+`systemctl start book-scraper`<br><br>
 
 **Meanwell installation hints:<br>**
 - BIC-2200 (need to be installed by a electrically qualified person):<br>

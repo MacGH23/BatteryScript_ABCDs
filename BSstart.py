@@ -2,13 +2,19 @@
 
 import os
 import sys
+import subprocess
 from time import sleep
 
 def tmux(command):
     os.system('tmux %s' % command)
 
-def starttmux():
-    tmux('new-session -d -s BS ' + p + '/BatteryScript.py')
+def StartTmuxSession():
+    tmux('new-session -d -s BS')
+
+def startBS():
+    c = 'send-keys -t BS ' + p + '/BatteryScript.py Enter'
+    print(c)
+    tmux(c)
 
 def showtmux():
     print("Use CTRL+B -> release -> D to exit Tmux")
@@ -16,18 +22,20 @@ def showtmux():
     tmux('attach -t BS')
 
 def Method_0():
-    #Just restart using Tmux
     print("Method 0")
-    starttmux()
+    startBS()
 
 def Method_1():
-    #print("Method 1")
+    print("Method 1")
+    startBS()
 
 def Method_2():
     print("Method 2")
+    startBS()
 
 def Method_3():
     print("Method 3")
+    startBS()
 
 if len (sys.argv) == 1:
     print("Missing parameter")
@@ -41,11 +49,16 @@ if len (sys.argv) == 1:
     sys.exit()
 
 p = os.path.dirname(__file__)
+#Just start using Tmux. Wait 3 Seconds to be sure the last session is closed
+print("WAIT 3 seconds to start ... ")
+sleep(3)
 
 m = int(sys.argv[1])
 if(m > 10): #indicate sleep during reboot
     sleep(10)
     m = m - 10
+
+StartTmuxSession()
 
 if(m == 0): Method_0()
 if(m == 1): Method_1()

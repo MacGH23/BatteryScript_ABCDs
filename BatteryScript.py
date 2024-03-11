@@ -6,6 +6,10 @@
 # Use on own risk !
 
 ##########################################################################################
+# Installation
+# Install tmux
+# sudo apt install tmux
+#
 # Needed external python3 modules use pip or pip3 depands on your environment
 # pip3 install pyserial
 # pip3 install paho-mqtt
@@ -33,6 +37,7 @@
 # macGH 25.02.2024  Version 0.2.1: Improved BIC-2200 handling for always on
 # macGH 03.02.2024  Version 0.2.2: Fixed some bugs. Start adding Temperature checks
 # macGH 08.02.2024  Version 0.2.3: Fixed BIC2200 Alwayson prevent stop during shutdown;added Restartbuttons;Added Temperature check
+# macGH 11.02.2024  Version 0.2.4: Fixed tmux restart problem
 
 import os
 import sys
@@ -170,10 +175,10 @@ class WS(BaseHTTPRequestHandler):
                       self._gettableentry('RAM usage in %',psutil.virtual_memory().percent) +\
                       self._gettableentry('Reboot',status.WebRebootSDcounter)   +\
                       self._gettableentry('Shutdown',status.WebRebootSDcounter) +\
-                      self._gettableentry('Restart0',status.WebRebootSDcounter) +\
-                      self._gettableentry('Restart1',status.WebRebootSDcounter) +\
-                      self._gettableentry('Restart2',status.WebRebootSDcounter) +\
-                      self._gettableentry('Restart3',status.WebRebootSDcounter)
+                      self._gettableentry('RestartMethod0',status.WebRebootSDcounter) +\
+                      self._gettableentry('RestartMethod1',status.WebRebootSDcounter) +\
+                      self._gettableentry('RestartMethod2',status.WebRebootSDcounter) +\
+                      self._gettableentry('RestartMethod3',status.WebRebootSDcounter) 
 
             content = self._beginhtml(message,-1,'/system') + \
                       '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;font-size:1.1vw;">'+ \
@@ -230,8 +235,10 @@ class WS(BaseHTTPRequestHandler):
                 self.wfile.write(self._systemhtml("Read System status"))
             if('/DIRECTRESTART' in self.path):
                 n = self.path[-1]
+                p = os.path.dirname(__file__)
                 self.wfile.write(self._statushtml("DIRECTRESTART ! NR " + str(n)))
-                subprocess.Popen([sys.executable, 'BSstart.py',n], start_new_session=True)
+                subprocess.Popen([p + '/BSstart.py',n], start_new_session=True)
+                #subprocess.Popen([sys.executable, 'BSstart.py',n], start_new_session=True)
                 sys.exit(1)
 
             return
@@ -301,18 +308,21 @@ class WS(BaseHTTPRequestHandler):
                     self.wfile.write(self._systemhtml(todo))
 
                 if('Restart' in variable):
-                    n = variable[-1] 
+                    n = variable[-1]
+                    p = os.path.dirname(__file__)
                     status.WebRebootSDcounter += 1
                     todo = 'Press 3 times to use Restart Method ' + n + ': ' + str(status.WebRebootSDcounter)
                     if(status.WebRebootSDcounter == 3):
                         todo = 'Execute Restart Method ' + n + ' !'
                         self.wfile.write(self._systemhtml(todo))
-                        subprocess.Popen([sys.executable, 'BSstart.py',n], start_new_session=True)
+                        #subprocess.Popen([sys.executable, p +'/BSstart.py',n], start_new_session=True)
+                        subprocess.Popen([p + '/BSstart.py',n], start_new_session=True)
                         sys.exit(1)
                     self.wfile.write(self._systemhtml(todo))
 
             return
 
+        #Get the log handler to prevent to print all to the screen
         def log_request(self, code=None, size=None):
             host, port = self.client_address[:2]
             mylogs.info('<-> HTTP Request from: ' + host + ' - Site: ' + self.path)
@@ -842,7 +852,7 @@ def gpio_callback(channel):
 #####################################################################
 def logstatus():
         mylogs.info("-> STATUS: C:" + str(status.ChargerEnabled) + " D:" + str(status.DisChargerEnabled) + " | SOC:" + str(status.BMSSOC) + "%  BattV:" + str(status.BatteryVoltage/100) + "V |  Total: " + str(status.CurrentTotalWatt) + "W  Meter:" + str(status.CurrentWattValue) + "W  Average: " + str(status.CurrentAverageWatt) + "W  LOUT:" + str(status.LastWattValueUsedinDevice) + "W | RCAP: " + str(round(status.EstBatteryWh/1000)) )
-        mylogs.info("-> STATUS: BICC: " +  str(cfg.MW_BIC_COUNTER) + " - NPBC: " + str(cfg.MW_NPB_COUNTER))
+        mylogs.verbose("-> STATUS: BICC: " +  str(cfg.MW_BIC_COUNTER) + " - NPBC: " + str(cfg.MW_NPB_COUNTER))
 
 #####################################################################
 # LCD routine
@@ -993,7 +1003,7 @@ def StartStopOperationCharger(val,force=0):
         status.BatteryFULL = 1
         force = 2 #force stop charging, 2 if BIC is used with always on
         #Set to est. max of installed battery
-        #status.EstBatteryWh = cfg.BatteryTotalWH
+        status.EstBatteryWh = cfg.BatteryTotalWH
 
     if(status.BatteryFULL == 1):
         mylogs.info("StartStopOperationCharger: Battery Full ! - Charging current too small: " + str(status.LastChargerGetCurrent) + " - Min: " + str(cfg.StopMinChargeCurrent))
@@ -1617,7 +1627,7 @@ def CheckTemperatures():
         if(status.MW_BIC_Temperature > cfg.MW_BIC2200_MaxTemp):
             mylogs.error("CheckTemperatures: MW_BIC_Temperature Temperature too high")
 
-        mylogs.verbose("CheckTemperatures: MWBIC: " + str(status.MW_BIC_Temperature) + " MWNPB: " + str(status.MW_NPB_Temperature) + \
+        mylogs.info("CheckTemperatures: MWBIC: " + str(status.MW_BIC_Temperature) + " MWNPB: " + str(status.MW_NPB_Temperature) + \
                        " LT1: " + str(status.LT1_Temperature) + " LT2: " + str(status.LT2_Temperature) + " LT3: " + str(status.LT3_Temperature) + \
                        " BMSFET: " + str(BMSstatus.BMSTemp_Mosfet) + " BMST1: " + str(BMSstatus.BMSTemp1) + " BMST2: " + str(BMSstatus.BMSTemp2))
 
