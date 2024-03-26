@@ -38,6 +38,7 @@
 # macGH 03.02.2024  Version 0.2.2: Fixed some bugs. Start adding Temperature checks
 # macGH 08.02.2024  Version 0.2.3: Fixed BIC2200 Alwayson prevent stop during shutdown;added Restartbuttons;Added Temperature check
 # macGH 11.02.2024  Version 0.2.4: Fixed tmux restart problem
+# macGH 26.03.2024  Version 0.2.5: Fixed Temperature reading
 
 import os
 import sys
@@ -1606,16 +1607,16 @@ def CheckTemperatures():
     mylogs.debug("CheckTemps ...")
     try:
         if(cfg.Selected_Device_Charger == 0):
-            status.MW_BIC_Temperature = int(mwcandev.temp_read()/10) #need only 2 digits
+            status.MW_BIC_Temperature = round(int(mwcandev.temp_read())/10) #need only 2 digits
         if(cfg.Selected_Device_Charger == 1):
-            status.MW_NPB_Temperature = int(mwcandev.temp_read()/10) #need only 2 digits
+            status.MW_NPB_Temperature = round(int(mwcandev.temp_read())/10) #need only 2 digits
 
         if(status.LT1_Temperature > cfg.lt_MaxTemp):
-            mylogs.error("CheckTemperatures: LT1 Temperature too high")
+            mylogs.error("CheckTemperatures: LT1 Temperature too high: " + status.LT1_Temperature)
         if(status.LT2_Temperature > cfg.lt_MaxTemp):
-            mylogs.error("CheckTemperatures: LT2 Temperature too high")
+            mylogs.error("CheckTemperatures: LT2 Temperature too high: " + status.LT2_Temperature)
         if(status.LT3_Temperature > cfg.lt_MaxTemp):
-            mylogs.error("CheckTemperatures: LT3 Temperature too high")
+            mylogs.error("CheckTemperatures: LT3 Temperature too high: " + status.LT3_Temperature)
         if(BMSstatus.BMSTemp_Mosfet > cfg.BMS_MaxTempMosFet):
             mylogs.error("CheckTemperatures: BMSTemp_Mosfet Temperature too high")
         if(BMSstatus.BMSTemp1 > cfg.BMS_MaxTemp1):
@@ -1632,7 +1633,7 @@ def CheckTemperatures():
                        " BMSFET: " + str(BMSstatus.BMSTemp_Mosfet) + " BMST1: " + str(BMSstatus.BMSTemp1) + " BMST2: " + str(BMSstatus.BMSTemp2))
 
     except Exception as e:
-        mylogs.error("CalcBatteryWh EXEPTION !")
+        mylogs.error("CheckTemperatures EXEPTION !")
         mylogs.error(str(e))
 
     return
