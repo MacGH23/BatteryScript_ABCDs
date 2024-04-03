@@ -39,6 +39,7 @@
 # macGH 08.02.2024  Version 0.2.3: Fixed BIC2200 Alwayson prevent stop during shutdown;added Restartbuttons;Added Temperature check
 # macGH 11.02.2024  Version 0.2.4: Fixed tmux restart problem
 # macGH 26.03.2024  Version 0.2.5: Fixed Temperature reading
+# macGH 26.03.2024  Version 0.2.6: Update EEPROM Write Check for MW
 
 import os
 import sys
@@ -89,7 +90,7 @@ class WS(BaseHTTPRequestHandler):
             if((parameter=='EstBatteryWh')):
                 Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Reset to 0</button></form>'
 
-            if((parameter=='Reboot') or (parameter=='Shutdown') or ('Restart' in parameter)):
+            if((parameter=='Reboot') or (parameter=='Shutdown') or ('RestartMethod' in parameter)):
                 Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Press 3 times</button></form>'
 
                       #f'<input type="text" name="EstBatteryWhValue" placeholder="{value}">' + \
@@ -118,7 +119,7 @@ class WS(BaseHTTPRequestHandler):
                       f'<base href={cfg.WSipadr}:{cfg.WSport}/"  target="_parent"/>\n' + \
                       '</head>\n' + \
                       '<body>\n' + \
-                      '<h1>Welcome to ABCDs WebServer Interface - WIP</h1>\n' + \
+                      '<h1>Welcome to ABCDs WebServer Interface</h1>\n' + \
                       '<p style="font-size:1.4vw;">Links: &nbsp;<a href="/">Show global Status</a>&nbsp;&nbsp;&nbsp;' + \
                       '<a href="/config">Show Config</a>&nbsp;&nbsp;&nbsp;' + \
                       '<a href="/bms">Show BMS status</a>&nbsp;&nbsp;&nbsp;' + \
@@ -395,6 +396,7 @@ class Devicestatus:
         self.LT3_Temperature            = 0
         self.MW_NPB_Temperature         = 0
         self.MW_BIC_Temperature         = 0
+        self.MW_EEPromOff               = 0
 
 class chargerconfig:
 
@@ -722,8 +724,10 @@ def on_exit():
                 mylogs.info("CLEAN UP: Shutdown MQTT")
                 mqttclient.on_message = "" #prevent any further message to be proceed
                 mqttpublish(1)
+                sleep(0.5) 
+                mqttpublish(1)
                 mylogs.info("CLEAN UP: mqtt unsubcribe: " + cfg.mqttsubscribe)
-                #Doing it 2 times to be sure we really unsubscribe
+                #Doing it 2 times to be sure we really unsubscribe, ignore error message
                 mqttclient.unsubscribe(cfg.mqttsubscribe)
                 mqttclient.unsubscribe(cfg.mqttsubscribe)
                 mqttclient.disconnect()
@@ -801,6 +805,10 @@ def CheckPatameter():
 
 def MW_EEPROM_Counter_INC(ChargerDisChargemode): #CD = 0: Charger; 1: DisCharger
     mylogs.debug("MW_EEPROM_Counter_INC Mode: " + str(ChargerDisChargemode))
+    if(status.MW_EEPromOff == 1):
+        mylogs.debug("MW_EEPROM_WRITE disabled in Firmware :-)")
+        return
+
     if(ChargerDisChargemode == 1): #DisCharger only BIC
         cfg.MW_BIC_COUNTER += 1
         mylogs.info("MW_EEPROM_Counter_INC BIC2200: " + str(cfg.MW_BIC_COUNTER))
@@ -2031,6 +2039,14 @@ if (cfg.Selected_Device_Charger <=1):
     Voltage_IN = Voltage_IN + cfg.Voltage_ACIN_correction
     mylogs.info("Grid Voltage: " + str(Voltage_IN) + " V")
 
+    #Check EEPROM write disable (only available with a FW > 02/2024!)
+    sc  = mwcandev.system_config(0,0)
+    if(not is_bit(sc,SYSTEM_CONFIG_EEP_OFF)):
+        mylogs.warning("MEANWELL EEPROM WRITE BACK IS ENABLED. WITH A FIRMWARE > April / 2024 THIS CAN BE DISABLED")
+        mylogs.warning("MEANWELL SYSTEM CONFIG BIT " + str(SYSTEM_CONFIG_EEP_OFF))
+        mylogs.warning("run:   ./Charger/mwcancmd.py systemconfigset 1025    to disable EEPROM write if possible")
+    else: status.MW_EEPromOff = 1    
+
 ##################
     #Meanwell BIC-2200 specific
     if (cfg.Selected_Device_Charger==0):
@@ -2088,11 +2104,6 @@ if (cfg.Selected_Device_Charger <=1):
         sc  = mwcandev.system_config(0,0)
         cuve = mwcandev.NPB_curve_config(0,0,0) #Bit 7 should be 0
         mylogs.debug("NPB SystemConfig: " + str(sc) + " CURVE_CONFIG: " + str(cuve))
-
-        #Check EEPROM write disable (only available with a FW > 02/2024!)
-        if(not is_bit(sc,SYSTEM_CONFIG_EEP_OFF)):
-            mylogs.warning("NPB EEPROM WRITE BACK IS ENABLED. WITH A FIRMWARE > 02/2024 THIS CAN BE DISABLED")
-            mylogs.warning("NBP SYSTEM CONFIG BIT " + str(SYSTEM_CONFIG_EEP_OFF))
 
             #Bit 7 is 1 --> Charger Mode             #check OFF during startup
         if ((is_bit(cuve,CURVE_CONFIG_CUVE)) or ((sc & 0b0000000000000110) != 0)):

@@ -4,6 +4,7 @@ import os
 import sys
 import subprocess
 from time import sleep
+from configupdater import ConfigUpdater
 
 def tmux(command):
     os.system('tmux %s' % command)
@@ -22,12 +23,23 @@ def showtmux():
     tmux('attach -t BS')
 
 def Method_0():
-    print("Method 0")
+    print("Method 0 - Just restart the Script")
     startBS()
 
 def Method_1():
     print("Method 1")
-    startBS()
+    try:
+#		 Example for changing the paramter before starting the script	
+#        updater = ConfigUpdater()
+#        updater["Setup"]["LastDisChargePower_delta"].value    = '10'
+#        updater["Setup"]["ZeroDeltaDisChargeWATT"].value      = '10'
+#        updater.update_file()
+#        #wait 2 seconds 
+#        print("Wait 2 seconds ...")
+#        sleep(2)
+        startBS()
+    except Exception as e:
+        print(str(e))
 
 def Method_2():
     print("Method 2")
@@ -49,9 +61,9 @@ if len (sys.argv) == 1:
     sys.exit()
 
 p = os.path.dirname(__file__)
-#Just start using Tmux. Wait 3 Seconds to be sure the last session is closed
-print("WAIT 3 seconds to start ... ")
-sleep(3)
+#Just start using Tmux. Wait 5 seconds to be sure the last session is closed completly 
+print("WAIT 5 seconds to start ... ")
+sleep(5)
 
 m = int(sys.argv[1])
 if(m > 10): #indicate sleep during reboot

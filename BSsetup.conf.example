@@ -239,7 +239,7 @@ ZeroDeltaDisChargeWATT     =    15
 # Important since Meanwell are limited to power changes to 4.000.000 writes
 # 4.000.000 / 10 (years) / 365 (days) / 8 (hours sun) / 60 (min) = 2,3 changes / min for 10 year
 # 60 / 2,3 = every 26 seconds.
-# For NPB is a newer foirmware available where you can disable this (from 02/2024)
+# For NPB and BIC is a newer firmware available where you can disable this (from April - 2024)
 # Just try to set Bit 10 of systemconfig. If writebale you can disable it
 # since there will be no changes if the same value (in the range above) or max value, 
 # I guess every 15 seconds should be OK for min. 10 years for NPB Charger -> 15Sec/2powerrequests = 7,5 = 8
