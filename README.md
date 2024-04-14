@@ -21,6 +21,7 @@ x = 0..3
 **Charger:**
 * Meanwell BIC-2200<br>
 * Meanwell NPB-[450/750/1200/1700]-[12/24/48/96]<br>
+* Constant current based power supply via external power switch <br>
 * Simulator, can be used for testing<br>
 
 *Important Note for Meanwell devices !<br>*
@@ -35,7 +36,7 @@ e.g. (Meter update all 2 seconds) x (8) = only after 16 seconds an update will b
 **Discharger:**
 * Meanwell BIC-2200<br>
 * Lumentree (by ask4it) 600/1000/2000, upto 3 can be used in parallel<br>
-Sun inverters with Trucki PCB should also work <br>
+* Sun1000/2000 inverters with TruckiRS485 PCB should also work, but not tested <br>
 * Simulator, can be used for testing
 
 **BMS:**

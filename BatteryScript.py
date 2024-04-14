@@ -40,6 +40,7 @@
 # macGH 11.02.2024  Version 0.2.4: Fixed tmux restart problem
 # macGH 26.03.2024  Version 0.2.5: Fixed Temperature reading
 # macGH 26.03.2024  Version 0.2.6: Update EEPROM Write Check for MW
+# macGH 10.04.2024  Version 0.2.7: Added Constant Based Charger via external switch
 
 import os
 import sys
@@ -61,11 +62,12 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from io import BytesIO
 import subprocess
 
-
+#BS classes
 from Charger.mwcan import *
 from DisCharger.lt232 import *
 from BMS.jkbms import *
 from Meter.meter import *
+from Charger.constbased import *
 
 #LCD import
 from LCD.hd44780_i2c import i2clcd
@@ -500,6 +502,12 @@ class chargerconfig:
             self.MW_BIC2200_MaxTemp        =  int(updater["Setup"]["MW_BIC2200_MaxTemp"].value)
             self.MW_NPB_MaxTemp            =  int(updater["Setup"]["MW_NPB_MaxTemp"].value)
 
+            self.CBC_devid                 =  int(updater["Setup"]["CBC_devid"].value)
+            self.CBC_ipadr                 =  updater["Setup"]["CBC_ipadr"].value
+            self.CBC_user                  =  updater["Setup"]["CBC_user"].value
+            self.CBC_pass                  =  updater["Setup"]["CBC_pass"].value
+            self.CBC_wattdelta             =  int(updater["Setup"]["CBC_wattdelta"].value)
+
             self.StopOnConnectionLost      =  int(updater["Setup"]["StopOnConnectionLost"].value)
             self.GetPowerOption            =  int(updater["Setup"]["GetPowerOption"].value)
             self.PowerControlmethod        =  int(updater["Setup"]["PowerControlmethod"].value)
@@ -515,7 +523,7 @@ class chargerconfig:
             self.http_vzl_UUID             =  updater["Setup"]["http_VZL_UUID"].value
             self.http_iobrogerobject       =  updater["Setup"]["http_iobrogerobject"].value
 
-
+            self.lt_devtype                =  int(updater["Setup"]["lt_devtype"].value)
             self.lt_foreceoffonstartup     =  int(updater["Setup"]["lt_foreceoffonstartup"].value)
             self.lt_count                  =  int(updater["Setup"]["lt_count"].value)
             self.lt_efficacy_factor        =  int(updater["Setup"]["lt_efficacy_factor"].value)
@@ -592,6 +600,12 @@ class chargerconfig:
             mylogs.info("LastChargePower_delta:      " + str(self.LastChargePower_delta))
             mylogs.info("MaxDisChargeWATT:           " + str(self.MaxDisChargeWATT))
             mylogs.info("MinDisChargeWATT:           " + str(self.MinDisChargeWATT))
+
+            mylogs.info("CBC_devid:                  " + str(self.CBC_devid))
+            mylogs.info("CBC_wattdelta:              " + str(self.CBC_wattdelta))
+            mylogs.info("CBC_ipadr:                  " + self.CBC_ipadr)
+            mylogs.info("CBC_user:                   " + self.CBC_user)
+            mylogs.info("CBC_pass:                   " + self.CBC_pass)
 
             mylogs.info("MaxChargeCurrent:           " + str(self.MaxChargeCurrent))
             mylogs.info("MinChargeCurrent:           " + str(self.MinChargeCurrent))
@@ -738,6 +752,11 @@ def on_exit():
         StartStopOperationCharger(0,1)
         StartStopOperationDisCharger(0,1)
 
+#        if (cfg.Selected_Device_Charger == 2):
+#            mylogs.verbose("CONSTANT BASED CHARGER SETUP")
+#            cbc = ChargerConstBased(cfg.CBC_devid, cfg.CBC_ipadr, cfg.CBC_user, cfg.CBC_pass, cfg.loglevel)
+#            cbc.PowerOff()
+
         #CAN close for 0=bic2200 and 1=NPB
         if (mwcandev != None):
             mylogs.info("CLEAN UP: Shutdown MEANWELL DEVICE")
@@ -790,7 +809,7 @@ def CheckPatameter():
         return 1
         
     if(cfg.BatteryVoltageSource == 0):
-        mylogs.error("\n\nNO VOLTAGE SOURCE DEFINED!\n")
+        mylogs.error("\n\nNO VOLTAGE SOURCE DEFINED BUT NEEDED !!\n")
         return 1
 
     if((cfg.ForceBicAlwaysOn == 1) and ((cfg.Selected_Device_Charger + cfg.Selected_Device_DisCharger) != 0)):
@@ -1038,6 +1057,11 @@ def StartStopOperationCharger(val,force=0):
         Charger_Meanwell_Set(val,force)
         return
     
+    if (cfg.Selected_Device_Charger == 2):     #ConstantBasedCharger
+        status.LastWattValueUsedinDevice = 0;  #prevent wrong calulation
+        Const_Based_Charger_Set(val,force)
+        return     
+
     if (cfg.Selected_Device_Charger == 255):     #Simulator
         status.LastWattValueUsedinDevice = 0;  #prevent wrong calulation
         mylogs.info("Simulator Charger set to: " + str(val) + "W")
@@ -1130,6 +1154,57 @@ def StartStopOperationDisCharger(val,force=0):
     mylogs.warning("DisCharger type not supported yet")
     return
 
+#####################################################################
+#####################################################################
+#####################################################################
+# ConstBasedCharger
+def Const_Based_Charger_Set(val,force):
+    try: 
+        mylogs.debug("Const_Based_Charger_Set entry - value: " + str(val) + " Force: " + str(force))
+        
+        Newval = (-1)*val
+        #Only start if val is a lot bigger than MaxChargeWATT
+        if( (Newval != 0) and ((cfg.MaxChargeWATT + cfg.CBC_wattdelta) < Newval) ):
+            if(status.ChargerStatus  == 0):
+                mylogs.debug("Const_Based_Charger_Set try to set ON")
+                r = cbc.PowerOn()
+                if(r==1):
+                    status.ChargerStatus = 1
+                    sleep(0.3) #wait until BMS shows the current
+                    mylogs.verbose("Const_Based_Charger_Set to ON")
+                else:
+                    mylogs.error("Const_Based_Charger_Set ON ERROR: CAN NOT SET OUTPUT !")
+            
+        else: #stop charging if smaller than MaxChargeWATT
+            if((Newval < cfg.MaxChargeWATT) or force):
+                mylogs.verbose("Const_Based_Charger_Set to OFF")
+                if(status.ChargerStatus  == 1):
+                    r = cbc.PowerOff()
+                    if(r==0):
+                        status.ChargerStatus = 0
+                        status.LastWattValueUsedinDevice = 0
+                    else:
+                        mylogs.error("Const_Based_Charger_Set OFF ERROR: CAN NOT SET OUTPUT !")
+
+                status.LastWattValueUsedinDevice = 0
+                status.LastChargerGetCurrent = 0 #needed for detection Battery full only from Batteryvoltage
+
+        if(status.ChargerStatus == 1):
+            sleep(0.3)
+            GetBMSData() #Need to know the current for the battery
+            status.LastWattValueUsedinDevice = int((BMSstatus.BMSCurrent * BMSstatus.BMSVoltage) / -10000)
+            status.LastChargerGetCurrent = BMSstatus.BMSCurrent
+            if(status.LastWattValueUsedinDevice == 0): #is off or no BMS available, assume LastWattValueUsedinDevice
+                status.LastWattValueUsedinDevice = (-1)*cfg.MaxChargeWATT
+                status.LastChargerGetCurrent = 0 #needed for detection Battery full only from Batteryvoltage, 0 to ignore and look only to voltage
+
+        mylogs.verbose("Const_Based_Charger_Set: Output: " + str(status.LastWattValueUsedinDevice) + " New current: " + str(status.LastChargerGetCurrent))
+
+    except Exception as e:
+        mylogs.error("Const_Based_Charger_Set: EXEPTION !")
+        mylogs.error(str(e))
+   
+    return val
 
 #####################################################################
 #####################################################################
@@ -2154,6 +2229,14 @@ if (cfg.Selected_Device_Charger <=1):
             MW_EEPROM_Counter_INC(1)
         StartStopOperationMeanwell(1,1,1)
 
+#CAN INIT for CAN device: 0=bic2200, 1=NPB
+if (cfg.Selected_Device_Charger == 2):
+    mylogs.verbose("CONSTANT BASED CHARGER SETUP")
+    cbc = ChargerConstBased(cfg.CBC_devid, cfg.CBC_ipadr, cfg.CBC_user, cfg.CBC_pass, cfg.loglevel)
+    cbc.PowerOff()
+    status.ChargerStatus = 0
+
+
 #################################################################
 #################################################################
 ############  D I S C H A R G E R - S E C T I O N  ##############
@@ -2172,7 +2255,7 @@ if ((cfg.Selected_Device_DisCharger == 1) or (cfg.lt_foreceoffonstartup == 1)):
         mylogs.info("Lumentree Init FORCE OFF MODE ...")
 
     try:
-        LT1 = lt232(cfg.lt1_device,cfg.lt1_address,cfg.loglevel)
+        LT1 = lt232(cfg.lt_devtype,cfg.lt1_device,cfg.lt1_address,cfg.loglevel)
         LT1.lt232_open()
         status.LT1_Temperature = int(LT1.readtemp())
     except Exception as e:
@@ -2188,7 +2271,7 @@ if ((cfg.Selected_Device_DisCharger == 1) or (cfg.lt_foreceoffonstartup == 1)):
 
     if (cfg.lt_count > 1):
         try:
-            LT2 = lt232(cfg.lt2_device,cfg.lt2_address,cfg.loglevel)
+            LT2 = lt232(cfg.lt_devtype,cfg.lt2_device,cfg.lt2_address,cfg.loglevel)
             LT2.lt232_open()
         except Exception as e:
             mylogs.error("\n\nLumentree Device 2 not found !\n")
@@ -2204,7 +2287,7 @@ if ((cfg.Selected_Device_DisCharger == 1) or (cfg.lt_foreceoffonstartup == 1)):
 
     if (cfg.lt_count > 2):
         try:
-            LT3 = lt232(cfg.lt3_device,cfg.lt3_address,cfg.loglevel)
+            LT3 = lt232(cfg.lt_devtype,cfg.lt3_device,cfg.lt3_address,cfg.loglevel)
             LT3.lt232_open()
         except Exception as e:
             mylogs.error("\n\nLumentree Device 3 not found !\n")
@@ -2258,7 +2341,7 @@ if (cfg.Selected_BMS != 0):
 #Read the first battery value to initilize voltage and BMS
 #Just check all sources.
 i = 1
-while(((status.BatteryVoltage == 0) or (status.BMSSOC ==0)) and (i<10)):
+while(((status.BatteryVoltage == 0) ) and (i<10)): #or (status.BMSSOC == 0)
     GetChargerVoltage()
     GetDisChargerVoltage()
     GetBatteryVoltage()

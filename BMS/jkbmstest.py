@@ -82,5 +82,6 @@ print("temp_2   : " + str(jk.temp_2))
 print("BatVolt  : " + str(jk.voltage/100))                                                                                                    
 print("Current  : " + str(jk.act_current/100))                                                                                                    
 print("SOC      : " + str(jk.soc))                                                                                                    
+print("WATT     : " + str(int((jk.voltage * jk.act_current) / 10000 )))                                                                                                    
          
 sys.exit(0)

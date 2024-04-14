@@ -18,6 +18,9 @@ from lt232 import *
 
 # "" = default = "/dev/ttyUSB00"
 # if you have another device specify here
+#0=Lumentree
+#1=Trucki RS485
+DEVTYPE = 0
 DEVPATH = "" 
 USEDIDADR = 1
 
@@ -80,7 +83,6 @@ def tempread():
     print(v)
     return v
 
-        
 def setwatt(val):
     # print ("Set output in WATT")
     # Set output in Watt
@@ -139,7 +141,7 @@ if logtoconsole == 1:
     mylogs.addHandler(stream)
 
 
-lt = lt232(DEVPATH,USEDIDADR,LOGLEVEL)
+lt = lt232(DEVTYPE, DEVPATH,USEDIDADR,LOGLEVEL)
 lt.lt232_open()
 
 command_line_argument()

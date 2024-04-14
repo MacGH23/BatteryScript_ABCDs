@@ -86,14 +86,15 @@ BMSRestartSOC = 3
 bms_device = /dev/ttyAMA0
 
 #Max Temperature for BMS
-BMS_MaxTempMosFet = 35
+BMS_MaxTempMosFet = 40
+#Temperature 1/2 depending where you install the sensors
 BMS_MaxTemp1      = 30
 BMS_MaxTemp2      = 30
 
 ### Battery DC voltage read ##############################################################
 # Which device should be used for Batetry DC Voltage read
 # 0 = Disabled, let the BMS,Discharger, ... handle the stop/start
-# DISABLED    = 0  
+# DISABLED    = 0  #not possible, you really need a BatteryVoltage for running this script
 # BMS         = 1
 # Charger     = 2
 # Discharger  = 3
@@ -126,9 +127,10 @@ DisChargerPowerCalcCount = 8
 PowerControlmethod = 1
 
 ### USED CHARGER #########################################################
-# BIC-2200 = 0
-# NPM-abc0 = 1
-# Simulator = 255
+# BIC-2200      = 0
+# NPM-abc0      = 1
+# ConstantBased = 2   (constant charger only to switch on/off with e.g. externel switch)
+# Simulator     = 255 (only show the value)
 Selected_Device_Charger = 255
 
 ### USED DISCHARGER ######################################################
@@ -203,21 +205,41 @@ mqttpublishWATTCut     = 0
 ##########################################################################
 #### ( D I S ) - C H A R G E R - C O N F I G #############################
 ##########################################################################
+
+##########################################################################
+#Constant Based Charger with external switch
+#Devid: 
+#0: Tasmota
+#1: Shelly
+#Use MaxChargeWATT to specify the output power
+CBC_devid = 0
+CBC_ipadr = 192.168.2.71
+#prevent switch on/off too often, the value will be added to MaxChargeWATT  (e.g. add 50W or 100W depends on your charger)
+#Otherwise 
+CBC_wattdelta = 100
+CBC_user  = 
+CBC_pass  = 
+
+###### G E N E R E L #####################################################
 #General info, details also set in sections of the charger
 #Min Watt what the charger can provide, see datasheet
+#NOTE: For Meanwell specify in Meanwell section in Ampare
 MinChargeWATT              =     0  
 
 #Max Watt what the charger can provide, see datasheet
-MaxChargeWATT              =  1000  
+#NOTE: For Meanwell specify in Meanwell section in Ampare
+MaxChargeWATT              =  480
 
 #How much Watt the discharger / Inverter can provide.
 #Check for Lumentree what is the real max output at max set. At 24V the output is lower beause of limited current
 #Lumentree 600 @ 24V has only 570W max !
 #If you have more than 1 installed, this value must be the total of all installed discharger !
 #NOTE: For Lumentree it is calculated by the values you specify in the Lumentree ltx_maxwatt section !
+#NOTE: For Meanwell specify in Meanwell section in Ampare
 MaxDisChargeWATT           =   570  
 
 #Min Watt what the discharger / Inverter can provide, normally 0; Lumentree 600 = 27W --> use 28 to be sure ;-)
+#NOTE: For Meanwell specify in Meanwell section in Ampare
 MinDisChargeWATT           =    28  
 
 #LastInverterPower hyteresis, dont change the output if new value in this range (+ and -)
@@ -228,7 +250,6 @@ LastDisChargePower_delta   =    15
 ZeroDeltaChargerWatt       =    0
 
 #LastInverterPower hyteresis, dont change the output if new value in this range (+ and -)
-#Should be the same as ZeroDeltaDisChargeWATT to have most effect
 LastDisChargePower_delta   =    15
 
 #Reduce x Watt from Discharger output to prevent output to GRID 
@@ -253,6 +274,11 @@ MeterUpdateDisChargeCounter = 8
 ##########################################################################
 # Lumentree / Trucki parameters ##########################################
 ##########################################################################
+#Lumentree/Trucki devtype
+# 0 = Lumentree + Lumentree with self build Trucki addon PCB
+# 1 = Trucki RS485 for SUN1000  (https://github.com/trucki-eu/RS485-Interface-for-Sun-GTIL2-1000)
+lt_devtype = 0
+
 # If a lumentree is installed but you want to use an other Device or simualtor, 
 # the lumentree will start at max power during startup, this will prevent this
 # Power in WATT ! 
@@ -293,7 +319,7 @@ lt3_maxwatt = 0
 #Specify then the exact current and voltage you want to use 
 
 #How much Cells do you have in your Battery  
-CellCount              = 1
+CellCount              = 0
 
 #How much AH has each Cell, needed for calulation of Battery state
 CellAH                 = 10
@@ -308,7 +334,7 @@ CellvoltageMax         = 345
 #When the charger stoped charing because of low current, 
 #this value defines when charging is allowed again
 #Voltage drop after stop charging
-CellvoltageMaxRestart  = 331     
+CellvoltageMaxRestart  = 333     
 
 #Min cell voltage for caculation of min Battery voltage (e.g. 8*305 = 2440 = 24,40V) 
 #mainly done via BMS SOC check but normally not very exact. 
@@ -365,8 +391,8 @@ USEDID = 03
 Voltage_ACIN_correction     =   -9  
 
 #Max Temperature for the device. If Temp > MaxTemp = Stop
-MW_BIC2200_MaxTemp = 60
-MW_NPB_MaxTemp     = 60
+MW_BIC2200_MaxTemp = 50
+MW_NPB_MaxTemp     = 50
 
 #Voltage correction for Charge and DisCharge voltage in *100
 #MW has +/- 0,24V specified
@@ -374,7 +400,7 @@ MW_NPB_MaxTemp     = 60
 #Discharge is not so critical as long as you do not specify absolut minimum
 #Chargevoltage should be correct as good as can be. Otherwise to high or too low voltage used
 #This values only apply to the Dis-/Charger Set settings, not the reading of the voltage value from the device !
-#If you use the MW for DC reading you have to adjust the min/max Cellvoltage[...] value if needed !
+#For reading adjustment of DC Voltage correction see "BatteryVoltageCorrection" above
 MW_NPB_ChargeVoltCorr    = 0
 MW_BIC_ChargeVoltCorr    = 0
 MW_BIC_DisChargeVoltCorr = 0
