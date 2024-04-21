@@ -21,7 +21,7 @@ x = 0..3
 **Charger:**
 * Meanwell BIC-2200<br>
 * Meanwell NPB-[450/750/1200/1700]-[12/24/48/96]<br>
-* Constant current based power supply via external power switch <br>
+* Constant current based power supply via external power switch <br> IP based power switch supported now: Tasmota, Shelly<br>
 * Simulator, can be used for testing<br>
 
 *Important Note for Meanwell devices !<br>*
@@ -36,7 +36,7 @@ e.g. (Meter update all 2 seconds) x (8) = only after 16 seconds an update will b
 **Discharger:**
 * Meanwell BIC-2200<br>
 * Lumentree (by ask4it) 600/1000/2000, upto 3 can be used in parallel<br>
-* Sun1000/2000 inverters with TruckiRS485 PCB should also work, but not tested <br>
+* Sun1000/2000 inverters with TruckiRS485 PCB should also work with UART and RS485, but not tested <br>
 * Simulator, can be used for testing
 
 **BMS:**
@@ -66,7 +66,7 @@ JKBMS | RS485 | [Waveshare RS485 CAN HAT](https://www.waveshare.com/rs485-can-ha
 
 Meanwell devices using a small 2x7 pin connector from MPE for the CAN interface.<br> Normally a connector with 2 wires are part of the delievery. The connector is a [MPE BLC 14](https://www.reichelt.de/crimp-buchsenleiste-14-pol-mpe-blc-14-p247189.html?CCOUNTRY=445&LANGUAGE=de&nbc=1&&r=1) (partnumber 906-2-014-X-BS0A10) and [crimp pins](https://www.reichelt.de/crimpkontakt-fuer-mpe-blc-einzeln-mpe-cc222-p150922.html?CCOUNTRY=445&LANGUAGE=de&nbc=1&&r=1) (partnumber CC2-22/30-TT-RL)
 
-Only the CAN wires are needed to install. See manual of the device where the CAN PINs are.
+Only the CAN wires are needed to install additionally. See manual of the device where the CAN PINs are.
 
 Lumentree devices uses a normal RS232 interface with modbus protocol.<br>
 Easiest methode to connect is a simple USB to RS232 adapter.
@@ -103,10 +103,11 @@ To detach, press CTRL+"B" -> release -> Press "D"<br>
 
 `Options for BSstart [0..3,9]`<br>
 Default "0" just starts the script,<br>
-1..3 can be definded on your own<br>
+1..3 can be definded on your own startup procedure e.g. different settings for summer / winter<br>
 9: show the tmux console"<br>
 For a 10 second delay call BSstart.py with [10..13] (network boot delay)
 
+**Tmux Startup**<br>
 Run during startup:<br>
 Thee are several ways to start the script automatically.<br>
 I use an entry in cron to start the BSstart.py<br>
@@ -118,6 +119,12 @@ crontab -e
 ```
 Change the path to the right one.<br>
 Use 10 as argument to be sure that network is up.
+
+**systemd startup**<br>
+To use the script as a service copy the file ABCDS.service to /etc/systemd/system (not tested now, tmux is recommended)<br>
+`sudo cp ABCDS.service /etc/systemd/system`<br>
+`sudo systemctl daemon-reload`<br>
+`systemctl start book-scraper`<br><br>
 
 **Additional Features**<br>
 GPIO: <br>
@@ -145,17 +152,13 @@ Some python lib needed. Please install:<br>
 `pip3 install minimalmodbus`<br>
 `pip3 install configupdater`<br>
 `pip3 install psutil`<br>
-
+`pip3 install schedule`<br>
+`pip3 install rpi`<br>
 Install Tmux<br>
 `sudo apt install tmux`<br>
 
 For the serial communication with Lumentree and BMS the user must be added to dialout group<br>
 `sudo usermod -a -G tty $USER`<br>
-
-To use the script as a service copy the file ABCDS.service to /etc/systemd/system (not well tested now, tmux is recommended)<br>
-`sudo cp ABCDS.service /etc/systemd/system`<br>
-`sudo systemctl daemon-reload`<br>
-`systemctl start book-scraper`<br><br>
 
 **Meanwell installation hints:<br>**
 - BIC-2200 (need to be installed by a electrically qualified person):<br>

@@ -1,6 +1,6 @@
 [Setup]
-# Change to 1 if you setup everything and accept the discalaimer
-# THERE IS NO GURANTEE FOR AN ERROR FREE EXECUTION
+# Change to 1 if you setup everything and accept the disclaimer
+# THERE IS NO GUARANTEE FOR AN ERROR FREE EXECUTION
 # YOU TAKE THE 100% RISK IF YOU USE THIS SCRIPT !!!
 # THE AUTHOR IS NOT LIABLE FOR ANY DAMAGE !!
 # YOU HAVE BEEN WARNED !
@@ -16,7 +16,7 @@
 # 
 # OTHERWISE THE SCRIPT CAN HANGUP OR THE HARDWARE CAN DECREASE FASTER !
 # 
-# FOR MEANWELL DEVCIES CHANGE "MeterUpdateCounter" BELOW, SEE EXPLANATION ! 
+# FOR MEANWELL DEVICES CHANGE "MeterUpdateCounter" BELOW, SEE EXPLANATION ! 
 i_changed_my_config       = 0
 
 # Enter Loglevel 0,10,20,30,40,50 
@@ -35,7 +35,7 @@ logtofile                 = 0
 logappendfile             = 0
 
 #You can log to syslog, but this can be a lot of data !
-#Should be used when run as a service after fully tested with your envirnment and loglevel set to warning
+#Should be used when run as a service after fully tested with your environment and loglevel set to warning
 logtosyslog               = 0
 
 ##########################################################################
@@ -62,7 +62,7 @@ gpio4 = 0
 
 ##########################################################################
 # Webserver setup 
-# Enable the interternal WebServer for information and options
+# Enable the internal WebServer for information and options
 # 0 = Disabled
 # 1 = Enabled
 Use_WebServer = 1
@@ -71,16 +71,16 @@ WSport = 9000
 WSipadr = 
 
 ### BMS USD ##############################################################
-# Software calculate the SOC form DC voltage from BatteryVoltageSource (see below)
+# Software calculates the SOC form DC voltage from BatteryVoltageSource (see below)
 # DISABLED  = 0
 # Software  = 1 #not fully implemented 
 # JKBMS     = 2
 Selected_BMS = 0
-#Discharge until ..., -1 = Don't check BMS SOC Level at all, let BMS/Voltage control the stoping
+#Discharge until ..., -1 = Don't check BMS SOC Level at all, let BMS/Voltage control the stopping
 #Check if your BMS SOC Value matches the real SOC, otherwise use only Voltages
 BMSminSOC = 0
-#When the charger stoped charing because of BMSminSOC, 
-#this value defines when DisCharging is allowed again
+#When the charger stopped charging because of BMSminSOC, 
+#this value defines when discharging is allowed again
 #If you don't want to use it, set to 0 !
 BMSRestartSOC = 3
 bms_device = /dev/ttyAMA0
@@ -92,8 +92,8 @@ BMS_MaxTemp1      = 30
 BMS_MaxTemp2      = 30
 
 ### Battery DC voltage read ##############################################################
-# Which device should be used for Batetry DC Voltage read
-# 0 = Disabled, let the BMS,Discharger, ... handle the stop/start
+# Which device should be used for Battery DC Voltage read
+# 0 = Disabled, let the BMS, Discharger, ... handle the stop/start
 # DISABLED    = 0  #not possible, you really need a BatteryVoltage for running this script
 # BMS         = 1
 # Charger     = 2
@@ -109,8 +109,8 @@ BatteryVoltageCorrection = 0
 EstBatteryWh = 0
 
 ##########################################################################
-# Measurements for calculating Dis-Charge power average of power event (smooth the power outpot)
-# You can specify for Charger and DisCharger seperatly if you like
+# Measurements for calculating Dis-Charge power average of power event (smooth the power output)
+# You can specify for Charger and Discharger separately if you like
 # 0=forbidden ;-)
 # 1=just use the actual power value
 # 2=average of 2 power events
@@ -120,7 +120,7 @@ DisChargerPowerCalcCount = 8
 
 # Select the method to control the charger / discharger
 # see "def process_power(val)" --> in the script !!
-# you can use the already implemneted or implement your own
+# you can use the already implemented or implement your own
 # 0   = DISABLED - only for debug do not use
 # 1   = Universal simple Charge / Discharge method
 # 255 = Simulator
@@ -129,7 +129,7 @@ PowerControlmethod = 1
 ### USED CHARGER #########################################################
 # BIC-2200      = 0
 # NPM-abc0      = 1
-# ConstantBased = 2   (constant charger only to switch on/off with e.g. externel switch)
+# ConstantBased = 2   (constant charger only to switch on/off with e.g. external switch)
 # Simulator     = 255 (only show the value)
 Selected_Device_Charger = 255
 
@@ -214,43 +214,40 @@ mqttpublishWATTCut     = 0
 #Use MaxChargeWATT to specify the output power
 CBC_devid = 0
 CBC_ipadr = 192.168.2.71
-#prevent switch on/off too often, the value will be added to MaxChargeWATT  (e.g. add 50W or 100W depends on your charger)
+#prevent switch on/off too often, the value will be added to MaxChargeWATT (e.g. add 50W or 100W depends on your charger)
 #Otherwise 
 CBC_wattdelta = 100
 CBC_user  = 
 CBC_pass  = 
 
-###### G E N E R E L #####################################################
+###### G E N E R A L #####################################################
 #General info, details also set in sections of the charger
-#Min Watt what the charger can provide, see datasheet
-#NOTE: For Meanwell specify in Meanwell section in Ampare
+#Min Watt that the charger can provide, see datasheet
+#NOTE: For Meanwell specify in Meanwell section in Ampere
 MinChargeWATT              =     0  
 
 #Max Watt what the charger can provide, see datasheet
-#NOTE: For Meanwell specify in Meanwell section in Ampare
+#NOTE: For Meanwell specify in Meanwell section in Ampere
 MaxChargeWATT              =  480
 
 #How much Watt the discharger / Inverter can provide.
-#Check for Lumentree what is the real max output at max set. At 24V the output is lower beause of limited current
+#Check for Lumentree what is the real max output at max set. At 24V the output is lower because of limited current
 #Lumentree 600 @ 24V has only 570W max !
 #If you have more than 1 installed, this value must be the total of all installed discharger !
 #NOTE: For Lumentree it is calculated by the values you specify in the Lumentree ltx_maxwatt section !
-#NOTE: For Meanwell specify in Meanwell section in Ampare
+#NOTE: For Meanwell specify in Meanwell section in Ampere
 MaxDisChargeWATT           =   570  
 
 #Min Watt what the discharger / Inverter can provide, normally 0; Lumentree 600 = 27W --> use 28 to be sure ;-)
-#NOTE: For Meanwell specify in Meanwell section in Ampare
+#NOTE: For Meanwell specify in Meanwell section in Ampere
 MinDisChargeWATT           =    28  
 
-#LastInverterPower hyteresis, dont change the output if new value in this range (+ and -)
+#LastInverterPower hysteresis, do not change the output if new value in this range (+ and -)
 LastDisChargePower_delta   =    15
 
 #Do not upload power to Grid, always take (a bit) power from grid
 #not implemented now
 ZeroDeltaChargerWatt       =    0
-
-#LastInverterPower hyteresis, dont change the output if new value in this range (+ and -)
-LastDisChargePower_delta   =    15
 
 #Reduce x Watt from Discharger output to prevent output to GRID 
 ZeroDeltaDisChargeWATT     =    15
@@ -261,12 +258,12 @@ ZeroDeltaDisChargeWATT     =    15
 # 4.000.000 / 10 (years) / 365 (days) / 8 (hours sun) / 60 (min) = 2,3 changes / min for 10 year
 # 60 / 2,3 = every 26 seconds.
 # For NPB and BIC is a newer firmware available where you can disable this (from April - 2024)
-# Just try to set Bit 10 of systemconfig. If writebale you can disable it
+# Just try to set Bit 10 of systemconfig. If writable you can disable it
 # since there will be no changes if the same value (in the range above) or max value, 
 # I guess every 15 seconds should be OK for min. 10 years for NPB Charger -> 15Sec/2powerrequests = 7,5 = 8
 # For BIC2200 you should use a higher value, min 30sec. /2 = 15
-# METER should not update more than 2 seconds, please adjust the value accordingliy ! 
-# You can specify for charge and discharge sperately, can also be the same value
+# METER should not update more than 2 seconds, please adjust the value accordingly ! 
+# You can specify for charge and discharge separately, can also be the same value
 MeterUpdateChargeCounter    = 8
 MeterUpdateDisChargeCounter = 8
 
@@ -279,7 +276,7 @@ MeterUpdateDisChargeCounter = 8
 # 1 = Trucki RS485 for SUN1000  (https://github.com/trucki-eu/RS485-Interface-for-Sun-GTIL2-1000)
 lt_devtype = 0
 
-# If a lumentree is installed but you want to use an other Device or simualtor, 
+# If a lumentree is installed but you want to use another Device or simulator, 
 # the lumentree will start at max power during startup, this will prevent this
 # Power in WATT ! 
 # 570W = 570
@@ -309,43 +306,43 @@ lt3_maxwatt = 0
 
 ##########################################################################
 # Here you specify your main parameter for charging
-# The meanwell min/max paramter are already stored in the mwcan.ini, 
+# The Meanwell min/max parameter are already stored in the mwcan.ini, 
 # can can not be changed here 
 ##########################################################################
 
 #IMPROTANT: ALL VOLTAGES AND CURRENT IS NEEDED IN (VALUE) * 100 !!! 
 #e.g. 3,45V * 100 = 345 or 25A = 25*100 = 2500
-#For setup paramaters make sure you measure the voltage with a good multimeter, e.g. the MW has a +/- value
+#For setup parameters make sure you measure the voltage with a good multimeter, e.g. the MW has a +/- value
 #Specify then the exact current and voltage you want to use 
 
 #How much Cells do you have in your Battery  
 CellCount              = 0
 
-#How much AH has each Cell, needed for calulation of Battery state
+#How much AH has each Cell, needed for calculation of Battery state
 CellAH                 = 10
 
-#Max cell voltage for caculation of max battery Chargevoltage (e.g. 8 cells * 3,45V = 27,60 --> 8 * 345 = 2760) 
-#Max voltage for charing the battery
+#Max cell voltage for calculation of max battery Chargevoltage (e.g. 8 cells * 3,45V = 27,60 --> 8 * 345 = 2760) 
+#Max voltage for charging the battery
 #Common is 3,45V, MAX is 3,65V ! 
 CellvoltageMax         = 345
 
 #Restart cell voltage for restart the charging (e.g. 8*331 = 2648 = 26,48) 
 #Should be (a bit) lower than CellvoltageMax 
-#When the charger stoped charing because of low current, 
+#When the charger stopped charging because of low current, 
 #this value defines when charging is allowed again
 #Voltage drop after stop charging
 CellvoltageMaxRestart  = 333     
 
-#Min cell voltage for caculation of min Battery voltage (e.g. 8*305 = 2440 = 24,40V) 
+#Min cell voltage for calculation of min Battery voltage (e.g. 8*305 = 2440 = 24,40V) 
 #mainly done via BMS SOC check but normally not very exact. 
 #you should use the voltage as better indicator 
 #e.g. Common is 3,01V, MIN is 2,50V ! 
 CellvoltageMin         = 305
 
 #Restart cell voltage for restart the discharging (e.g. 8*313 = 2504 = 25,04V) 
-#Needs to be higher than  CellvoltageMin
-#When the Discharger stoped discharing because of low voltage, 
-#this value defines when discharging is allowed again, bcause the Cell Voltage raises after stop discharging
+#Needs to be higher than CellvoltageMin
+#When the Discharger stopped discharging because of low voltage, 
+#this value defines when discharging is allowed again, because the Cell Voltage raises after stop discharging
 CellvoltageMinRestart  = 320
 
 #Current *100 --> 25,0A * 100 = 2500
@@ -353,12 +350,12 @@ CellvoltageMinRestart  = 320
 MaxChargeCurrent          = 1000  
 
 #Current *100  --> 7,2A * 100 = 720
-#Can be the minmum of the device or a higher value 
+#Can be the minimum of the device or a higher value 
 MinChargeCurrent          =  720  
 
 #Current *100  --> 5,0A * 100 = 500
-#Should be a lower value than the minmum of the device 
-#When should the charger stop charing and assum the Battery is full
+#Should be a lower value than the minimum of the device 
+#When should the charger stop charging and assume the Battery is full
 #Normally if the chargcurrent gets lower than MinChargeCurrent
 #You can still charge the Battery (like float) until STOP current is reached
 #Set to 0 if you do not want to stop 
@@ -372,11 +369,11 @@ MinDisChargeCurrent       =   90
 #Can be the maximum of the device or a lower value 
 MaxDisChargeCurrent       = 1000  
 
-#how much power diffrence is OK
+#how much power difference is OK
 #not used now
 ChargerCurrentDiffHyst    =    0   
 
-#how much current (A) is allowed before start discharge in *100 notation, e.g 0.1A = 10 (0.1A * 230V = 23W)
+#how much current (A) is allowed before start discharge in *100 notation, e.g. 0.1A = 10 (0.1A * 230V = 23W)
 DisChargerCurrentMin      =   10   
 
 ##########################################################################
@@ -387,7 +384,7 @@ DisChargerCurrentMin      =   10
 # NPM-abc0 --> 00 to 03, all open = 03
 USEDID = 03
 
-#Voltage in from Grid correction, NPB hat +/- 10V, you should check it with voltmeter and set the diffrence (with "-" if negative)
+#Voltage in from Grid correction, NPB hat +/- 10V, you should check it with voltmeter and set the difference (with "-" if negative)
 Voltage_ACIN_correction     =   -9  
 
 #Max Temperature for the device. If Temp > MaxTemp = Stop
@@ -397,21 +394,21 @@ MW_NPB_MaxTemp     = 50
 #Voltage correction for Charge and DisCharge voltage in *100
 #MW has +/- 0,24V specified
 #Measure the outputvoltage of the MW Device with a good multimeter
-#Discharge is not so critical as long as you do not specify absolut minimum
-#Chargevoltage should be correct as good as can be. Otherwise to high or too low voltage used
-#This values only apply to the Dis-/Charger Set settings, not the reading of the voltage value from the device !
+#Discharge is not so critical as long as you do not specify absolute minimum
+#Chargevoltage should be correct as good as can be. Otherwise too high or too low voltage used
+#This values only applies to the Dis-/Charger Set settings, not the reading of the voltage value from the device !
 #For reading adjustment of DC Voltage correction see "BatteryVoltageCorrection" above
 MW_NPB_ChargeVoltCorr    = 0
 MW_BIC_ChargeVoltCorr    = 0
 MW_BIC_DisChargeVoltCorr = 0
 
-#Do not switch the BIC on/off during Charging / DisCharging. Only switch direction
-#be carefull !! This can cause a overcharge problem if the CellvoltageMax is set too high (max 345 !)
+#Do not switch the BIC on/off during charging / discharging. Only switch direction.
+#be carefull !! This can cause an overcharge problem if the CellvoltageMax is set too high (max 345 !)
 #If the Battery is empty the BIC will use power form the grid to hold CellvoltageMin ! 
 #Only use this option if you use BIC2200 as charger and discharger !
 ForceBicAlwaysOn = 0
 
-#Max. Efficacy Factor in % of the BIC2000 DisCharger mode (datasheet), needed for Ah calculation 
+#Max. efficiency factor in % of the BIC2000 DisCharger mode (datasheet), needed for Ah calculation 
 #Check with your setup if this match and adjust if needed
 BIC2200_efficacy_factor = 93
 

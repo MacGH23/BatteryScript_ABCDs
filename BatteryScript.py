@@ -17,6 +17,7 @@
 # pip3 install minimalmodbus
 # pip3 install configupdater
 # pip3 install psutil
+# pip3 install schedule
 ##########################################################################################
 # Hints
 # For the serial communication the user must be added to dialout group
@@ -718,9 +719,11 @@ class chargerconfig:
         updater = ConfigUpdater()
         updater.read(status.configfile)
 
-        updater["Setup"]["MW_NPB_COUNTER"].value     = str(cfg.MW_NPB_COUNTER)
-        updater["Setup"]["MW_BIC_COUNTER"].value     = str(cfg.MW_BIC_COUNTER)
-        updater["Setup"]["EstBatteryWh"].value      = str(cfg.EstBatteryWh)
+        updater["Setup"]["MW_NPB_COUNTER"].value       = str(cfg.MW_NPB_COUNTER)
+        updater["Setup"]["MW_BIC_COUNTER"].value       = str(cfg.MW_BIC_COUNTER)
+        updater["Setup"]["EstBatteryWh"].value         = str(cfg.EstBatteryWh)
+        updater["Setup"]["i_changed_my_config"].value  = str(cfg.i_changed_my_config)
+        
         updater.update_file()
         return
 
@@ -1691,25 +1694,29 @@ def CheckTemperatures():
     try:
         if(cfg.Selected_Device_Charger == 0):
             status.MW_BIC_Temperature = round(int(mwcandev.temp_read())/10) #need only 2 digits
+            if(status.MW_BIC_Temperature > cfg.MW_BIC2200_MaxTemp):
+                mylogs.error("CheckTemperatures: MW_BIC_Temperature Temperature too high")
+
         if(cfg.Selected_Device_Charger == 1):
             status.MW_NPB_Temperature = round(int(mwcandev.temp_read())/10) #need only 2 digits
+            if(status.MW_NPB_Temperature > cfg.MW_NPB_MaxTemp):
+                mylogs.error("CheckTemperatures: MW_NPB_Temperature Temperature too high")
 
-        if(status.LT1_Temperature > cfg.lt_MaxTemp):
-            mylogs.error("CheckTemperatures: LT1 Temperature too high: " + status.LT1_Temperature)
-        if(status.LT2_Temperature > cfg.lt_MaxTemp):
-            mylogs.error("CheckTemperatures: LT2 Temperature too high: " + status.LT2_Temperature)
-        if(status.LT3_Temperature > cfg.lt_MaxTemp):
-            mylogs.error("CheckTemperatures: LT3 Temperature too high: " + status.LT3_Temperature)
-        if(BMSstatus.BMSTemp_Mosfet > cfg.BMS_MaxTempMosFet):
-            mylogs.error("CheckTemperatures: BMSTemp_Mosfet Temperature too high")
-        if(BMSstatus.BMSTemp1 > cfg.BMS_MaxTemp1):
-            mylogs.error("CheckTemperatures: BMSTemp1 Temperature too high")
-        if(BMSstatus.BMSTemp2 > cfg.BMS_MaxTemp2):
-            mylogs.error("CheckTemperatures: BMSTemp2 Temperature too high")
-        if(status.MW_NPB_Temperature > cfg.MW_NPB_MaxTemp):
-            mylogs.error("CheckTemperatures: MW_NPB_Temperature Temperature too high")
-        if(status.MW_BIC_Temperature > cfg.MW_BIC2200_MaxTemp):
-            mylogs.error("CheckTemperatures: MW_BIC_Temperature Temperature too high")
+        if(cfg.Selected_Device_DisCharger == 1):
+            if(status.LT1_Temperature > cfg.lt_MaxTemp):
+                mylogs.error("CheckTemperatures: LT1 Temperature too high: " + status.LT1_Temperature)
+            if(status.LT2_Temperature > cfg.lt_MaxTemp):
+                mylogs.error("CheckTemperatures: LT2 Temperature too high: " + status.LT2_Temperature)
+            if(status.LT3_Temperature > cfg.lt_MaxTemp):
+                mylogs.error("CheckTemperatures: LT3 Temperature too high: " + status.LT3_Temperature)
+
+        if(cfg.Selected_BMS > 0):
+            if(BMSstatus.BMSTemp_Mosfet > cfg.BMS_MaxTempMosFet):
+                mylogs.error("CheckTemperatures: BMSTemp_Mosfet Temperature too high")
+            if(BMSstatus.BMSTemp1 > cfg.BMS_MaxTemp1):
+                mylogs.error("CheckTemperatures: BMSTemp1 Temperature too high")
+            if(BMSstatus.BMSTemp2 > cfg.BMS_MaxTemp2):
+                mylogs.error("CheckTemperatures: BMSTemp2 Temperature too high")
 
         mylogs.info("CheckTemperatures: MWBIC: " + str(status.MW_BIC_Temperature) + " MWNPB: " + str(status.MW_NPB_Temperature) + \
                        " LT1: " + str(status.LT1_Temperature) + " LT2: " + str(status.LT2_Temperature) + " LT3: " + str(status.LT3_Temperature) + \
@@ -2117,10 +2124,22 @@ if (cfg.Selected_Device_Charger <=1):
     #Check EEPROM write disable (only available with a FW > 02/2024!)
     sc  = mwcandev.system_config(0,0)
     if(not is_bit(sc,SYSTEM_CONFIG_EEP_OFF)):
-        mylogs.warning("MEANWELL EEPROM WRITE BACK IS ENABLED. WITH A FIRMWARE > April / 2024 THIS CAN BE DISABLED")
-        mylogs.warning("MEANWELL SYSTEM CONFIG BIT " + str(SYSTEM_CONFIG_EEP_OFF))
-        mylogs.warning("run:   ./Charger/mwcancmd.py systemconfigset 1025    to disable EEPROM write if possible")
-    else: status.MW_EEPromOff = 1    
+        mylogs.warning("MEANWELL EEPROM WRITE BACK IS ENABLED.")
+        if(not is_bit(cfg.i_changed_my_config,1)):
+                mylogs.warning("MEANWELL SYSTEM CONFIG BIT - TRY TO SET EEPROM WRITE OFF ...")
+                set_bit(cfg.i_changed_my_config,1) #save the try to prvent to try again and again 
+                
+                set_bit(sc,SYSTEM_CONFIG_EEP_OFF)
+                mwcandev.system_config(1,sc)
+                sleep(0.1)
+                sc  = mwcandev.system_config(0,0)
+                if(not is_bit(sc,SYSTEM_CONFIG_EEP_OFF)):
+                    mylogs.warning("MEANWELL SYSTEM CONFIG BIT - COULD NOT SET EEPROM WRITE OFF")
+                    mylogs.warning("MEANWELL EEPROM WRITE IS STILL ENABLED. WITH A FIRMWARE > April / 2024 THIS CAN BE DISABLED")
+                else:
+                    status.MW_EEPromOff = 1    
+    else:
+        status.MW_EEPromOff = 1    
 
 ##################
     #Meanwell BIC-2200 specific
