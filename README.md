@@ -148,6 +148,9 @@ An integrated webserver at port 9000 is implemented to provide information and s
 Some python lib needed. Please install:<br>
 `pip3 install pyserial`<br>
 `pip3 install paho-mqtt`<br>
+`--> if you already have installed paho-mqtt < 2.0 you have to update to 2.x` <br>
+`pip3 install -U paho-mqtt ` <br>
+`pip3 python-can` <br>
 `pip3 install ifcfg`<br>
 `pip3 install minimalmodbus`<br>
 `pip3 install configupdater`<br>

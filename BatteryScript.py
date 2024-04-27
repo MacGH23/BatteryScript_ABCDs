@@ -13,6 +13,9 @@
 # Needed external python3 modules use pip or pip3 depands on your environment
 # pip3 install pyserial
 # pip3 install paho-mqtt
+# if you already have installed paho-mqtt < 2.0
+# pip3 install -U paho-mqtt 
+# pip3 python-can
 # pip3 install ifcfg
 # pip3 install minimalmodbus
 # pip3 install configupdater
@@ -42,6 +45,7 @@
 # macGH 26.03.2024  Version 0.2.5: Fixed Temperature reading
 # macGH 26.03.2024  Version 0.2.6: Update EEPROM Write Check for MW
 # macGH 10.04.2024  Version 0.2.7: Added Constant Based Charger via external switch
+# macGH 24.04.2024  Version 0.2.8: Update to paho-mqtt 2.0, fixed MW Check EEPROM Write
 
 import os
 import sys
@@ -1937,7 +1941,8 @@ def simulator_request():
 #####################################################################
 #####################################################################
 # mqtt functions
-def mqtt_on_connect(client, userdata, flags, rc):
+#def mqtt_on_connect(client, userdata, flags, rc):
+def mqtt_on_connect(client, userdata, flags, reason_code, properties):
     mylogs.info("mqtt: Connected with mqttserver")
     #Subscribe for actual Power from mqtt server
     if (cfg.GetPowerOption==0):
@@ -1945,11 +1950,12 @@ def mqtt_on_connect(client, userdata, flags, rc):
         mqttclient.subscribe(cfg.mqttsubscribe,qos=2)
     return
 
-def mqtt_on_disconnect(client, userdata, rc):
+#def mqtt_on_disconnect(client, userdata, rc):
+def mqtt_on_disconnect(client, userdata, flags, reason_code, properties):
     mylogs.warning("mqtt: DISConnected from mqttserver")
     mylogs.warning("mqtt: " + str(client))
-    if rc != 0:
-        mylogs.error("mqtt: Unexpected disconnect with mqttserver. Result: " + str(rc))
+    if reason_code != 0:
+        mylogs.error("mqtt: Unexpected disconnect with mqttserver. Result: " + str(reason_code))
         if(cfg.StopOnConnectionLost==1):
             mylogs.info("mqtt: LOST CONNECTION -> STOP ALL DEVICES")
             StartStopOperationCharger(0,1)
@@ -1966,9 +1972,16 @@ def mqtt_on_message(client, userdata, message):
     process_power(round(int(power)))
     return
 
-def mqtt_on_subscribe(client, userdata, mid, granted_qos):
-    mylogs.info("mqtt: Qos granted: " + str(granted_qos))
-    return
+#def mqtt_on_subscribe(client, userdata, mid, granted_qos):
+def mqtt_on_subscribe(client, userdata, mid, reason_codes, properties):
+    for sub_result in reason_codes:
+        if(sub_result < 128):
+            mylogs.info("mqtt: Qos granted: " + str(sub_result))
+            return
+        else:
+            mylogs.info("mqtt: Something went wrong during subscribe: " + str(sub_result))
+            return
+
 
 
 #add logger verbose
@@ -2126,18 +2139,19 @@ if (cfg.Selected_Device_Charger <=1):
     if(not is_bit(sc,SYSTEM_CONFIG_EEP_OFF)):
         mylogs.warning("MEANWELL EEPROM WRITE BACK IS ENABLED.")
         if(not is_bit(cfg.i_changed_my_config,1)):
-                mylogs.warning("MEANWELL SYSTEM CONFIG BIT - TRY TO SET EEPROM WRITE OFF ...")
-                set_bit(cfg.i_changed_my_config,1) #save the try to prvent to try again and again 
-                
-                set_bit(sc,SYSTEM_CONFIG_EEP_OFF)
-                mwcandev.system_config(1,sc)
-                sleep(0.1)
-                sc  = mwcandev.system_config(0,0)
-                if(not is_bit(sc,SYSTEM_CONFIG_EEP_OFF)):
-                    mylogs.warning("MEANWELL SYSTEM CONFIG BIT - COULD NOT SET EEPROM WRITE OFF")
-                    mylogs.warning("MEANWELL EEPROM WRITE IS STILL ENABLED. WITH A FIRMWARE > April / 2024 THIS CAN BE DISABLED")
-                else:
-                    status.MW_EEPromOff = 1    
+            mylogs.warning("MEANWELL SYSTEM CONFIG BIT - TRY TO SET EEPROM WRITE OFF ...")
+            cfg.i_changed_my_config = set_bit(cfg.i_changed_my_config,1) #save the try to prvent to try again and again 
+            
+            sc = set_bit(int(sc),SYSTEM_CONFIG_EEP_OFF)
+            mwcandev.system_config(1,sc)
+            sleep(0.3)
+            sc  = mwcandev.system_config(0,0)
+            if(not is_bit(sc,SYSTEM_CONFIG_EEP_OFF)):
+                mylogs.warning("MEANWELL SYSTEM CONFIG BIT - COULD NOT SET EEPROM WRITE OFF")
+                mylogs.warning("MEANWELL EEPROM WRITE IS STILL ENABLED. WITH A FIRMWARE > April / 2024 THIS CAN BE DISABLED")
+            else:
+                status.MW_EEPromOff = 1    
+                mylogs.warning("MEANWELL SYSTEM CONFIG BIT - EEPROM WRITE IS DISABLED")
     else:
         status.MW_EEPromOff = 1    
 
@@ -2414,7 +2428,7 @@ if (cfg.GetPowerOption==0) or (cfg.mqttpublish==1):
 
     try:
         mylogs.info("USE MQTT, Init ...")
-        mqttclient = mqtt.Client("BatteryController",clean_session=False)
+        mqttclient = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2,client_id="BatteryController",clean_session=False)
         mqttclient.on_connect    = mqtt_on_connect
         mqttclient.on_disconnect = mqtt_on_disconnect
         mqttclient.on_subscribe  = mqtt_on_subscribe
