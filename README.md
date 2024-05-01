@@ -163,6 +163,12 @@ Install Tmux<br>
 For the serial communication with Lumentree and BMS the user must be added to dialout group<br>
 `sudo usermod -a -G tty $USER`<br>
 
+**Lumentree installation hints:<br>**
+- Lumentree can not be updaeted too quickly <br>
+Setting recommendation: <br>
+LastDisChargePower_delta = 15 (between 10..20)<br>
+DisChargerPowerCalcCount = 4 (or higher)<br> 
+
 **Meanwell installation hints:<br>**
 - BIC-2200 (need to be installed by a electrically qualified person):<br>
 Normally a ON Jumperwire is installed in the device.<br>
