@@ -60,7 +60,7 @@ Additional hardware needed, depending on the used hardware
 Device / HW | Interface | Recommended
 ---|---|---|
 Meanwell | CAN | [Waveshare RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) or [Fischl USBTin](https://www.fischl.de/usbtin/)<br> ![Waveshare RS485CAN](/pictures/wavesharers485can.jpg "Waveshare RS485CAN")   ![Fischl USBTin](/pictures/usbtin.jpg "Fischl USBTin")
-Lumentree | RS232 | Any simple USB to RS232 adapter<br> ![USB RS232](/pictures/usbrs232.jpg "USB RS232")
+Lumentree | RS232 | Any simple USB to RS232 adapter<br> ![USB RS232](/pictures/usbrs232.jpg "USB RS232") or ![USB RS232](/pictures/RS232_USB2.jpg "USB RS232")
 JKBMS | RS485 | [Waveshare RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) with original JKRS485 adapter<br> ![JKBms RS485](/pictures/jkbms_rs485.JPG "JKBms RS485")
 
 
@@ -69,7 +69,8 @@ Meanwell devices using a small 2x7 pin connector from MPE for the CAN interface.
 Only the CAN wires are needed to install additionally. See manual of the device where the CAN PINs are.
 
 Lumentree devices uses a normal RS232 interface with modbus protocol.<br>
-Easiest methode to connect is a simple USB to RS232 adapter.
+Easiest methode to connect is a simple USB to RS232 adapter.<br>
+But see also Lumentree installation hints, because of Pin 9! <br>
 
 JKBMS is optional. You have to use the original JK RS485 adapter and connect it to a RS485 interface at the Raspberry. <br>
 Use the Waveshare CAN/RS485 HAT. Especially if you also use a CAN device.
@@ -168,6 +169,14 @@ For the serial communication with Lumentree and BMS the user must be added to di
 Setting recommendation: <br>
 LastDisChargePower_delta = 15 (between 10..20)<br>
 DisChargerPowerCalcCount = 4 (or higher)<br> 
+If you have problems (no answer or checksum error) with the USB RS232 adapter it could be that Lumentree DSUB9 is not 100% compartible. <br>
+It uses <br>
+PIN2 : TX <br>
+PIN3 : RX <br>
+PIN9 : 12V <-- This can cause communication errors or defect for the USB<->RS232 adapter.<br>
+In this case use a additional cable from the USB RS232 which only uses PIN2, PIN3, GND (USB -> RS232 -> Cable PIN2/3/GND -> Lumentree)<br>
+Or use a RS232 port protector and remove PIN9 <br>
+![RS232_pp](/pictures/RS232_portprotect.jpg "RS232pp")<br>
 
 **Meanwell installation hints:<br>**
 - BIC-2200 (need to be installed by a electrically qualified person):<br>
