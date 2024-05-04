@@ -64,7 +64,7 @@ Lumentree | RS232 | Any simple USB to RS232 adapter<br> ![USB RS232](/pictures/u
 JKBMS | RS485 | [Waveshare RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) with original JKRS485 adapter<br> ![JKBms RS485](/pictures/jkbms_rs485.JPG "JKBms RS485")
 
 
-Meanwell devices using a small 2x7 pin connector from MPE for the CAN interface.<br> Normally a connector with 2 wires are part of the delievery. The connector is a [MPE BLC 14](https://www.reichelt.de/crimp-buchsenleiste-14-pol-mpe-blc-14-p247189.html?CCOUNTRY=445&LANGUAGE=de&nbc=1&&r=1) (partnumber 906-2-014-X-BS0A10) and [crimp pins](https://www.reichelt.de/crimpkontakt-fuer-mpe-blc-einzeln-mpe-cc222-p150922.html?CCOUNTRY=445&LANGUAGE=de&nbc=1&&r=1) (partnumber CC2-22/30-TT-RL)
+Meanwell devices using a small 2x7 pin, 2.0 pitch connector from MPE for the CAN interface.<br> Normally a connector with 2 wires are part of the delievery. The connector is a [MPE BLC 14](https://www.reichelt.de/crimp-buchsenleiste-14-pol-mpe-blc-14-p247189.html?CCOUNTRY=445&LANGUAGE=de&nbc=1&&r=1) (partnumber 906-2-014-X-BS0A10) and [crimp pins](https://www.reichelt.de/crimpkontakt-fuer-mpe-blc-einzeln-mpe-cc222-p150922.html?CCOUNTRY=445&LANGUAGE=de&nbc=1&&r=1) (partnumber CC2-22/30-TT-RL)
 
 Only the CAN wires are needed to install additionally. See manual of the device where the CAN PINs are.
 
@@ -176,7 +176,7 @@ PIN3 : RX<br>
 PIN5 : GND<br>
 PIN9 : 12V <-- This can cause communication errors or defect for the USB<->RS232 adapter.<br>
 In this case use a additional cable from the USB RS232 which only uses PIN2, PIN3, GND (USB -> RS232 -> Cable PIN2/3/GND -> Lumentree)<br>
-Or use a RS232 port protector and remove PIN9 <br>
+Or use a RS232 port protector (1:1) and remove PIN9 <br>
 ![RS232_pp](/pictures/RS232_portprotect.jpg "RS232pp")<br>
 
 **Meanwell installation hints:<br>**
