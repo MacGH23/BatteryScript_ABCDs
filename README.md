@@ -60,7 +60,7 @@ Additional hardware needed, depending on the used hardware
 Device / HW | Interface | Recommended
 ---|---|---|
 Meanwell | CAN | [Waveshare RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) or [Fischl USBTin](https://www.fischl.de/usbtin/)<br> ![Waveshare RS485CAN](/pictures/wavesharers485can.jpg "Waveshare RS485CAN")   ![Fischl USBTin](/pictures/usbtin.jpg "Fischl USBTin")
-Lumentree | RS232 | Any simple USB to RS232 adapter<br> ![USB RS232](/pictures/usbrs232.jpg "USB RS232") or ![USB RS232](/pictures/RS232_USB2.jpg "USB RS232")
+Lumentree | RS232 | Any simple USB to RS232 adapter<br> ![USB RS232](/pictures/usbrs232.jpg "USB RS232") or ![USB RS232](/pictures/RS232_USB2.jpg "USB RS232") <br> See Lumentree installation hints 
 JKBMS | RS485 | [Waveshare RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) with original JKRS485 adapter<br> ![JKBms RS485](/pictures/jkbms_rs485.JPG "JKBms RS485")
 
 
@@ -171,8 +171,9 @@ LastDisChargePower_delta = 15 (between 10..20)<br>
 DisChargerPowerCalcCount = 4 (or higher)<br> 
 If you have problems (no answer or checksum error) with the USB RS232 adapter it could be that Lumentree DSUB9 is not 100% compartible. <br>
 It uses <br>
-PIN2 : TX <br>
-PIN3 : RX <br>
+PIN2 : TX<br>
+PIN3 : RX<br>
+PIN5 : GND<br>
 PIN9 : 12V <-- This can cause communication errors or defect for the USB<->RS232 adapter.<br>
 In this case use a additional cable from the USB RS232 which only uses PIN2, PIN3, GND (USB -> RS232 -> Cable PIN2/3/GND -> Lumentree)<br>
 Or use a RS232 port protector and remove PIN9 <br>
