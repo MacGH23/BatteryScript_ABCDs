@@ -46,6 +46,7 @@
 # macGH 26.03.2024  Version 0.2.6: Update EEPROM Write Check for MW
 # macGH 10.04.2024  Version 0.2.7: Added Constant Based Charger via external switch
 # macGH 24.04.2024  Version 0.2.8: Update to paho-mqtt 2.0, fixed MW Check EEPROM Write
+# macGH 10.05.2024  Version 0.2.9: Some small changes
 
 import os
 import sys
@@ -216,6 +217,7 @@ class WS(BaseHTTPRequestHandler):
                       self._gettableentry('DisChargerEnabled',status.DisChargerEnabled) + \
                       self._gettableentry('MW_NPB_COUNTER',cfg.MW_NPB_COUNTER) + \
                       self._gettableentry('MW_BIC_COUNTER',cfg.MW_BIC_COUNTER) + \
+                      self._gettableentry('LT_COUNTER',status.ltcounter) + \
                       self._gettableentry('WebAutoRefresh',status.WebAutoRefresh) + \
                       '</tbody>\n' + \
                       '</table>\n'+ \
@@ -404,6 +406,7 @@ class Devicestatus:
         self.MW_NPB_Temperature         = 0
         self.MW_BIC_Temperature         = 0
         self.MW_EEPromOff               = 0
+        self.ltcounter                  = 0
 
 class chargerconfig:
 
@@ -723,8 +726,9 @@ class chargerconfig:
         updater = ConfigUpdater()
         updater.read(status.configfile)
 
-        updater["Setup"]["MW_NPB_COUNTER"].value       = str(cfg.MW_NPB_COUNTER)
-        updater["Setup"]["MW_BIC_COUNTER"].value       = str(cfg.MW_BIC_COUNTER)
+        if(status.MW_EEPromOff == 0):
+            updater["Setup"]["MW_NPB_COUNTER"].value       = str(cfg.MW_NPB_COUNTER)
+            updater["Setup"]["MW_BIC_COUNTER"].value       = str(cfg.MW_BIC_COUNTER)
         updater["Setup"]["EstBatteryWh"].value         = str(cfg.EstBatteryWh)
         updater["Setup"]["i_changed_my_config"].value  = str(cfg.i_changed_my_config)
         
@@ -740,6 +744,7 @@ def on_exit():
     try:
         mylogs.info("CLEAN UP ...")
         schedule.clear() #remove all schedules if exists or not
+
         if ((cfg.GetPowerOption==0) or (cfg.mqttpublish == 1)):
             if (mqttclient != None):
                 mylogs.info("CLEAN UP: Shutdown MQTT")
@@ -769,7 +774,8 @@ def on_exit():
             mylogs.info("CLEAN UP: Shutdown MEANWELL DEVICE")
             mylogs.info("Close CAN device")
             mwcandev.can_down()
-            mylogs.info("MEANWELL EEPROM COUNTER  NPB:" + str(cfg.MW_NPB_COUNTER) + "  BIC2200: " + str(cfg.MW_BIC_COUNTER))
+            if(status.MW_EEPromOff == 0):
+                mylogs.info("MEANWELL EEPROM COUNTER  NPB:" + str(cfg.MW_NPB_COUNTER) + "  BIC2200: " + str(cfg.MW_BIC_COUNTER))
 
         if (LT1 != None): #Lumentree
             mylogs.info("CLEAN UP: Shutdown LUMENTREE DEVICE(s)")
@@ -824,6 +830,10 @@ def CheckPatameter():
         mylogs.error("SET ForceBicAlwaysOn to OFF")
         cfg.ForceBicAlwaysOn = 0
         return 0
+
+    if(cfg.BMSRestartSOC < cfg.BMSminSOC):
+        mylogs.error("\n\nBMSRestartSOC needs be be higher or equal than BMSminSOC\n")
+        return 1
 
     #looks good continue
     mylogs.info("Parameter check OK")
@@ -887,7 +897,8 @@ def gpio_callback(channel):
 #####################################################################
 def logstatus():
         mylogs.info("-> STATUS: C:" + str(status.ChargerEnabled) + " D:" + str(status.DisChargerEnabled) + " | SOC:" + str(status.BMSSOC) + "%  BattV:" + str(status.BatteryVoltage/100) + "V |  Total: " + str(status.CurrentTotalWatt) + "W  Meter:" + str(status.CurrentWattValue) + "W  Average: " + str(status.CurrentAverageWatt) + "W  LOUT:" + str(status.LastWattValueUsedinDevice) + "W | RCAP: " + str(round(status.EstBatteryWh/1000)) )
-        mylogs.verbose("-> STATUS: BICC: " +  str(cfg.MW_BIC_COUNTER) + " - NPBC: " + str(cfg.MW_NPB_COUNTER))
+        if(status.MW_EEPromOff == 0):
+            mylogs.verbose("-> STATUS: BICC: " +  str(cfg.MW_BIC_COUNTER) + " - NPBC: " + str(cfg.MW_NPB_COUNTER))
 
 #####################################################################
 # LCD routine
@@ -902,8 +913,7 @@ def printlcd(line1="", line2=""):
                 line1 = "PW:" + "{:<5}".format(str(status.CurrentWattValue))  + " I:" + str(status.LastWattValueUsedinDevice)
             
         if (line2==""): line2 = "SC:" + "{:<6}".format(str(status.BMSSOC)+"%") + "C:" + str(status.ChargerEnabled) + " D:" + str(status.DisChargerEnabled)
-
-        
+    
         if (cfg.Selected_LCD == 1):
             display.lcd_clear()
             mylogs.debug("LCD: Print LCD")
@@ -1035,13 +1045,14 @@ def StartStopOperationCharger(val,force=0):
 
     #Battery is full, stop charing and wait for discharge
     if((status.ChargerStatus  == 1)  and (status.LastChargerGetCurrent <= cfg.StopMinChargeCurrent) and ((status.BatteryVoltage+10) > cfg.FixedChargeVoltage)): # and (status.BMSSOC > 97)): 
+        mylogs.info("StartStopOperationCharger: Battery Full ! - Charging current too small: " + str(status.LastChargerGetCurrent) + " - Min: " + str(cfg.StopMinChargeCurrent))
         status.BatteryFULL = 1
         force = 2 #force stop charging, 2 if BIC is used with always on
         #Set to est. max of installed battery
         status.EstBatteryWh = cfg.BatteryTotalWH
 
     if(status.BatteryFULL == 1):
-        mylogs.info("StartStopOperationCharger: Battery Full ! - Charging current too small: " + str(status.LastChargerGetCurrent) + " - Min: " + str(cfg.StopMinChargeCurrent))
+        mylogs.info("StartStopOperationCharger: Battery Full ! - Nothing to do ... - Time for Idleling ;-)")
         val = 0
     
     if (force==0): #if force = 1, proceeed without any logic 
@@ -1251,6 +1262,31 @@ def StartStopOperationMeanwell(val, CD, force=0):
    
     return val
 
+def Charger_Meanwell_Voltage_controller(newCout):
+        #-2 628 84
+        #-3 528 100
+        #-4 452 76
+        #-5 373 79
+        #-6 310 63
+        #-7 233 77
+        #-8 162 71
+        #-9 0   162
+
+    mylogs.verbose("Charger_Meanwell_Voltage_controller - New current: " + str(newCout))
+
+    #We only do this voltage chargeadjust if EEPROM Write is OFF
+    if(status.MW_EEPromOff == 1): 
+        return
+    
+    if(newCout >= cfg.MinChargeCurrent):
+        NewVoltage = cfg.FixedChargeVoltage + MW_ChargeVoltCorr
+    else:
+        NewVoltage = status.ChargerVoltage - (round((cfg.MinChargeCurrent - newCout) / 80))
+
+    rval = mwcandev.v_out_set(0,0)
+    if(rval != NewVoltage):
+        mylogs.verbose("Charger_Meanwell_Voltage_controller - SET Voltage to: " + str(NewVoltage))
+        mwcandev.v_out_set(1,NewVoltage)
 
 def Charger_Meanwell_Set(val,force=0):
     try:
@@ -1306,11 +1342,11 @@ def Charger_Meanwell_Set(val,force=0):
                 
                 if(IntCurrent == 0):
                     #Probably no need to set since device will be set to OFF mode
-                    if(cfg.ForceBicAlwaysOn == 1): #only for BIC in always on mode
-                        mylogs.info("Charger_Meanwell_Set: BIC-2200 SET IntCurrent = 0")
-                        c = mwcandev.i_out_set(1,IntCurrent)
+                    if(cfg.ForceBicAlwaysOn == 1): #only for BIC in always on mode, set to MinChargeCurrent since 0 is not possible
+                        mylogs.info("Charger_Meanwell_Set: BIC-2200 SET IntCurrent = MinChargerCurrent")
+                        c = mwcandev.i_out_set(1,mwcandev.dev_MinChargeVoltage) #(1,IntCurrent)
                         MW_EEPROM_Counter_INC(0)
-                        sleep(0.4)
+                        sleep(0.3)
                     else:
                         mylogs.info("Charger_Meanwell_Set: IntCurrent = 0 - Do not set -> Device will be set to OFF")
                         
@@ -1483,17 +1519,18 @@ def DisCharger_BIC2200_Set(val,force=0):
 #####################################################################
 # Operation Lumentree reopen if Device has communication errors
 def Lumentree_ReOpen():
-    mylogs.warning("Lumentree_ReOpen !")
-    
+    #mylogs.warning("Lumentree_ReOpen DISABLED !") #perhaps not needed since port is open
+    status.ltcounter = status.ltcounter + 1
     try:
         LT1.lt232_close()
         if (cfg.lt_count > 1): LT2.lt232_close()
         if (cfg.lt_count > 2): LT3.lt232_close()
-        sleep(0.4)
+        sleep(0.2)
         
         LT1.lt232_open()
         if (cfg.lt_count > 1): LT2.lt232_open()
         if (cfg.lt_count > 2): LT3.lt232_open()
+        sleep(0.2)
 
     except Exception as e:
         mylogs.error("LUMENTREE REOPEN FAILED !")
@@ -1507,11 +1544,10 @@ def Lumentree_Check():
 
     mylogs.verbose("------> Lumentree Check Alive ...")
     try:
-        status.DisChargerVoltage = LT1.readDCvoltage() * 10  #return 3 digits, need 4 for compare --> *10
-        sleep(0.1)
         status.LT1_Temperature = int(LT1.readtemp()) #for temperature test
         if (cfg.lt_count > 1): status.LT2_Temperature = int(LT2.readtemp()) #for temperature test
         if (cfg.lt_count > 2): status.LT3_Temperature = int(LT3.readtemp()) #for temperature test
+        sleep(0.1)
         mylogs.debug("------> Lumentree Check Alive OK. BattVoltage: " + str(status.DisChargerVoltage)) # + " - Temperature: L1:" + str(status.LT1_Temperature) + " L2:" + str(status.LT2_Temperature) + " L3:" + str(status.LT3_Temperature))
         return 1
 
@@ -1555,8 +1591,9 @@ def DisCharger_Lumentree_Set(val,force=0):
         try:
             DCvoltage = 100    #for force to goto set watt output if LT reconnect
             DCvoltage = LT1.readDCvoltage()
+            sleep(0.1)
         except Exception as e:
-            mylogs.error("LUMMENTREE SET EXEPTION READ DC VOLTAGE!")
+            mylogs.error("LUMENTREE SET EXEPTION READ DC VOLTAGE!")
             mylogs.error(str(e))
         
         if (DCvoltage < 10): 
@@ -1597,21 +1634,21 @@ def DisCharger_Lumentree_Set(val,force=0):
     try:
         #Lumentree Inverter 1
         mylogs.verbose("DisCharger_Lumentree_Set   (1) : " + str(outpower1))
-        LT1.set_watt_out(outpower1);
+        LT1.set_watt_out(int(outpower1));
         sleep(0.2)  #wait 0.2 seconds to write next value
         status.LastWattValueUsedinDevice = LT1.read_watt_out()
     
         #Lumentree Inverter 2
         if (cfg.lt_count > 1):
             mylogs.verbose("DisCharger_Lumentree_Set   (2) : " + str(outpower2))
-            LT2.set_watt_out(outpower2);
+            LT2.set_watt_out(int(outpower2));
             sleep(0.2)  #wait 0.2 seconds to write next value
             status.LastWattValueUsedinDevice = status.LastWattValueUsedinDevice + LT2.read_watt_out()
             
         #Lumentree Inverter 3
         if (cfg.lt_count > 2):
             mylogs.verbose("DisCharger_Lumentree_Set   (3) : " + str(outpower3))
-            LT3.set_watt_out(outpower3);
+            LT3.set_watt_out(int(outpower3));
             sleep(0.2)  #wait 0.2 seconds to write next value
             status.LastWattValueUsedinDevice = status.LastWattValueUsedinDevice + LT3.read_watt_out()
 
@@ -1627,11 +1664,16 @@ def DisCharger_Lumentree_Set(val,force=0):
             status.DisChargerStatus = 1
 
     except Exception as e:
-        mylogs.error("LUMMENTREE SET EXEPTION !")
+        mylogs.error("LUMENTREE SET EXEPTION !")
         mylogs.error(str(e))
         status.LastWattValueUsedinDevice = 10 #force to go here
         status.DisChargerStatus = 1           #prevent not setting off, if LT is back again 
         Lumentree_ReOpen()
+        if((force == 1) and (val == 0)): # be really sure that LT is set to 0 on exit
+            LT1.set_watt_out(0);
+            if (cfg.lt_count > 1): LT2.set_watt_out(0)
+            if (cfg.lt_count > 2): LT3.set_watt_out(0)
+
 
     mylogs.info("DisCharger_Lumentree_Set read Total: " + str(status.LastWattValueUsedinDevice))
     return 
@@ -1654,10 +1696,11 @@ def GetDisChargerVoltage():
     mylogs.debug("GetDisChargerVoltage ...")
     try:
         if (cfg.Selected_Device_DisCharger == 0): #BIC2200
-            status.DisChargerVoltage = mwcandev.v_out_read()
+            status.DisChargerVoltage = mwcandev.v_out_read() 
 
         if (cfg.Selected_Device_DisCharger == 1): #Lumentree
-            #status.DisChargerVoltage = LT1.readDCvoltage() * 10 #return 3 digits, need 4 for compare --> *10
+            status.DisChargerVoltage = LT1.readDCvoltage() * 10 #return 3 digits, need 4 for compare --> *10
+            sleep(0.1)
             mylogs.debug("GetDisChargerVoltage: Nothing to do here, this is already done in Lumentree_Check !")
 
     except Exception as e:
@@ -1708,11 +1751,11 @@ def CheckTemperatures():
 
         if(cfg.Selected_Device_DisCharger == 1):
             if(status.LT1_Temperature > cfg.lt_MaxTemp):
-                mylogs.error("CheckTemperatures: LT1 Temperature too high: " + status.LT1_Temperature)
+                mylogs.error("CheckTemperatures: LT1 Temperature too high: " + str(status.LT1_Temperature))
             if(status.LT2_Temperature > cfg.lt_MaxTemp):
-                mylogs.error("CheckTemperatures: LT2 Temperature too high: " + status.LT2_Temperature)
+                mylogs.error("CheckTemperatures: LT2 Temperature too high: " + str(status.LT2_Temperature))
             if(status.LT3_Temperature > cfg.lt_MaxTemp):
-                mylogs.error("CheckTemperatures: LT3 Temperature too high: " + status.LT3_Temperature)
+                mylogs.error("CheckTemperatures: LT3 Temperature too high: " + str(status.LT3_Temperature))
 
         if(cfg.Selected_BMS > 0):
             if(BMSstatus.BMSTemp_Mosfet > cfg.BMS_MaxTempMosFet):
@@ -1791,8 +1834,8 @@ def getoutputpower(val):
             status.ProcessCount = 1
             status.WebRebootSDcounter = 0 #reset rebootcounter for webinterface
 
-            GetBMSData()  #Read all data and set some status IDs
             Lumentree_Check()  #Check every minute if LT is online, and get CD Voltage, if not try to reconnect
+            GetBMSData()  #Read all data and set some status IDs
             GetBatteryVoltage()
             CheckTemperatures()
 
@@ -1834,7 +1877,7 @@ def process_power(power):
         now  = datetime.datetime.now()
         diff = (now - status.LastMeterTime).total_seconds()
         #status.LastMeterTime will be set in CalcBatteryWh
-        if(diff < 1.45): #2 seconds minmum, we need up to  550ms for processing
+        if(diff < 1.30): #2 seconds minmum, we need up to  700ms for processing
             mylogs.warning("process_power: Too fast power meter reading ! Ignore value: " + str(diff))
             return
 
@@ -1941,7 +1984,7 @@ def simulator_request():
 #####################################################################
 #####################################################################
 # mqtt functions
-#def mqtt_on_connect(client, userdata, flags, rc):
+#def mqtt_on_connect(client, userdata, flags, rc): #mqtt < 2.00
 def mqtt_on_connect(client, userdata, flags, reason_code, properties):
     mylogs.info("mqtt: Connected with mqttserver")
     #Subscribe for actual Power from mqtt server
@@ -1950,10 +1993,11 @@ def mqtt_on_connect(client, userdata, flags, reason_code, properties):
         mqttclient.subscribe(cfg.mqttsubscribe,qos=2)
     return
 
-#def mqtt_on_disconnect(client, userdata, rc):
+#def mqtt_on_disconnect(client, userdata, rc): #mqtt <2.00
 def mqtt_on_disconnect(client, userdata, flags, reason_code, properties):
     mylogs.warning("mqtt: DISConnected from mqttserver")
     mylogs.warning("mqtt: " + str(client))
+#    if rc != 0:
     if reason_code != 0:
         mylogs.error("mqtt: Unexpected disconnect with mqttserver. Result: " + str(reason_code))
         if(cfg.StopOnConnectionLost==1):
@@ -1972,7 +2016,11 @@ def mqtt_on_message(client, userdata, message):
     process_power(round(int(power)))
     return
 
+#Mqtt < 2.00
 #def mqtt_on_subscribe(client, userdata, mid, granted_qos):
+#    mylogs.info("mqtt: Qos granted: " + str(granted_qos))
+#    return
+
 def mqtt_on_subscribe(client, userdata, mid, reason_codes, properties):
     for sub_result in reason_codes:
         if(sub_result < 128):
@@ -2005,6 +2053,7 @@ signal.signal(signal.SIGTERM, handle_exit)  #15
 #Ckeck if we should wait x seconds before start (Network interface up)
 if len(sys.argv) == 2:
     try:
+        mylogs.info("Wait some time ... \n")
         s = int(sys.argv[1])
         sleep(s)
     except Exception as e:
@@ -2033,6 +2082,16 @@ cfg     = chargerconfig()
 #put it into status class for easier status info for webserver
 status.EstBatteryWh = cfg.EstBatteryWh
 
+print("")
+print("#####################################################")
+print("      _       ______      ______  ______           ")
+print("     / \     |_   _ \   .' ___  ||_   _ `.         ")
+print("    / _ \      | |_) | / .'   \_|  | | `. \ .--.   ")
+print("   / ___ \     |  __'. | |         | |  | |( (`\]  ")
+print(" _/ /   \ \_  _| |__) |\ `.___.'\ _| |_.' / `'.'.  ")
+print("|____| |____||_______/  `.____ .'|______.' [\__) ) ")
+print("#####################################################")
+print("")
 print("######################################################")
 print("# THERE IS NO GURANTEE FOR AN ERROR FREE EXECUTION   #")
 print("# YOU TAKE THE TOTAL RISK IF YOU USE THIS SCRIPT !!! #")
@@ -2042,7 +2101,7 @@ print("# BE SURE YOU KNOW WHAT YOU ARE DOING !!             #")
 print("# THE AUTHOR(S) IS NOT LIABLE FOR ANY DAMAGE !!      #")
 print("# YOU HAVE BEEN WARNED !                             #")
 print("######################################################")
-
+print("")
 if (cfg.i_changed_my_config == 0):
     print("PLEASE SET UP YOUR DEVICE IN BSsetup.conf !!")
     print("CHECK ALL PARAMETERS CAREFULLY !!!")
@@ -2154,6 +2213,7 @@ if (cfg.Selected_Device_Charger <=1):
                 mylogs.warning("MEANWELL SYSTEM CONFIG BIT - EEPROM WRITE IS DISABLED")
     else:
         status.MW_EEPromOff = 1    
+        mylogs.info("MEANWELL SYSTEM CONFIG - EEPROM WRITE IS DISABLED")
 
 ##################
     #Meanwell BIC-2200 specific
@@ -2290,7 +2350,9 @@ if ((cfg.Selected_Device_DisCharger == 1) or (cfg.lt_foreceoffonstartup == 1)):
     try:
         LT1 = lt232(cfg.lt_devtype,cfg.lt1_device,cfg.lt1_address,cfg.loglevel)
         LT1.lt232_open()
+        sleep(0.2)
         status.LT1_Temperature = int(LT1.readtemp())
+        sleep(0.2)
     except Exception as e:
         mylogs.error("\n\nLumentree Device 1 not found !\n")
         mylogs.error(str(e))
@@ -2300,6 +2362,7 @@ if ((cfg.Selected_Device_DisCharger == 1) or (cfg.lt_foreceoffonstartup == 1)):
     mylogs.debug("LT1 temperature: " + str(status.LT1_Temperature))
     mylogs.debug("LT1 set output to 0")
     LT1.set_watt_out(0) #init with 0 #init with 0, force without any function above
+    sleep(0.3)
     cfg.MaxDisChargeWATT = cfg.lt1_maxwatt
 
     if (cfg.lt_count > 1):
@@ -2313,9 +2376,11 @@ if ((cfg.Selected_Device_DisCharger == 1) or (cfg.lt_foreceoffonstartup == 1)):
             sys.exit(1)
 
         status.LT2_Temperature = int(LT2.readtemp())
+        sleep(0.2)
         mylogs.debug("LT2 temperature: " + str(status.LT2_Temperature))
         mylogs.debug("LT2 set output to 0")
         LT2.set_watt_out(0) #init with 0, force without any function above
+        sleep(0.2)
         cfg.MaxDisChargeWATT = cfg.MaxDisChargeWATT + cfg.lt2_maxwatt
 
     if (cfg.lt_count > 2):
@@ -2329,9 +2394,11 @@ if ((cfg.Selected_Device_DisCharger == 1) or (cfg.lt_foreceoffonstartup == 1)):
             sys.exit(1)
 
         status.LT3_Temperature = int(LT3.readtemp())
+        sleep(0.2)
         mylogs.debug("LT3 temperature: " + str(status.LT3_Temperature))
         mylogs.debug("LT3 set output to 0")
         LT3.set_watt_out(0) #init with 0 #init with 0, force without any function above
+        sleep(0.2)
         cfg.MaxDisChargeWATT = cfg.MaxDisChargeWATT + cfg.lt3_maxwatt
 
     Lumentree_Check() #Get The first voltage needed for later
@@ -2429,6 +2496,7 @@ if (cfg.GetPowerOption==0) or (cfg.mqttpublish==1):
     try:
         mylogs.info("USE MQTT, Init ...")
         mqttclient = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2,client_id="BatteryController",clean_session=False)
+        #mqttclient = mqtt.Client(client_id="BatteryController",clean_session=False) #mqtt < 2.00
         mqttclient.on_connect    = mqtt_on_connect
         mqttclient.on_disconnect = mqtt_on_disconnect
         mqttclient.on_subscribe  = mqtt_on_subscribe
@@ -2489,4 +2557,4 @@ while True:
         httpd.handle_request() #handle webserver requests
     if (cfg.GetPowerOption==1) or (cfg.GetPowerOption==255):
         schedule.run_pending()
-    sleep(0.10)                #prevent high CPU usage
+    sleep(0.05)                #prevent high CPU usage

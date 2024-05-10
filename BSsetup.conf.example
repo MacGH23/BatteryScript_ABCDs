@@ -17,7 +17,7 @@
 # OTHERWISE THE SCRIPT CAN HANGUP OR THE HARDWARE CAN DECREASE FASTER !
 # 
 # FOR MEANWELL DEVICES CHANGE "MeterUpdateCounter" BELOW, SEE EXPLANATION ! 
-i_changed_my_config       = 0
+i_changed_my_config = 0
 
 # Enter Loglevel 0,10,20,30,40,50 
 # CRITICAL   50
@@ -76,13 +76,16 @@ WSipadr =
 # Software  = 1 #not fully implemented 
 # JKBMS     = 2
 Selected_BMS = 0
+
 #Discharge until ..., -1 = Don't check BMS SOC Level at all, let BMS/Voltage control the stopping
 #Check if your BMS SOC Value matches the real SOC, otherwise use only Voltages
 BMSminSOC = 0
+
 #When the charger stopped charging because of BMSminSOC, 
 #this value defines when discharging is allowed again
 #If you don't want to use it, set to 0 !
-BMSRestartSOC = 3
+#Must be higher as BMSminSOC !
+BMSRestartSOC = 5
 bms_device = /dev/ttyAMA0
 
 #Max Temperature for BMS
@@ -92,8 +95,8 @@ BMS_MaxTemp1      = 30
 BMS_MaxTemp2      = 30
 
 ### Battery DC voltage read ##############################################################
-# Which device should be used for Battery DC Voltage read
-# 0 = Disabled, let the BMS, Discharger, ... handle the stop/start
+# Which device should be used for Batetry DC Voltage read
+# 0 = Disabled, can not be used, because a voltage is needed for error prevention
 # DISABLED    = 0  #not possible, you really need a BatteryVoltage for running this script
 # BMS         = 1
 # Charger     = 2
@@ -115,8 +118,8 @@ EstBatteryWh = 0
 # 1=just use the actual power value
 # 2=average of 2 power events
 # 3=...
-ChargerPowerCalcCount    = 8
-DisChargerPowerCalcCount = 8
+ChargerPowerCalcCount    = 4
+DisChargerPowerCalcCount = 4
 
 # Select the method to control the charger / discharger
 # see "def process_power(val)" --> in the script !!
@@ -242,15 +245,18 @@ MaxDisChargeWATT           =   570
 #NOTE: For Meanwell specify in Meanwell section in Ampere
 MinDisChargeWATT           =    28  
 
-#LastInverterPower hysteresis, do not change the output if new value in this range (+ and -)
-LastDisChargePower_delta   =    15
+#LastInverterPower hyteresis, dont change the output if new value in this range (+ and -)
+LastChargePower_delta      =    10
 
 #Do not upload power to Grid, always take (a bit) power from grid
 #not implemented now
 ZeroDeltaChargerWatt       =    0
 
+#LastInverterPower hysteresis, do not change the output if new value in this range (+ and -)
+LastDisChargePower_delta   =    15
+
 #Reduce x Watt from Discharger output to prevent output to GRID 
-ZeroDeltaDisChargeWATT     =    15
+ZeroDeltaDisChargeWATT     =    10
 
 # How much Meter changes count before change output
 # #### IMPORTANT FOR MEANWELL ####
@@ -269,11 +275,11 @@ MeterUpdateDisChargeCounter = 8
 
 
 ##########################################################################
-# Lumentree / Trucki parameters ##########################################
+# Lumentree / Trucki / TruckiRS485 SUN10000 parameters ###################
 ##########################################################################
 #Lumentree/Trucki devtype
 # 0 = Lumentree + Lumentree with self build Trucki addon PCB
-# 1 = Trucki RS485 for SUN1000  (https://github.com/trucki-eu/RS485-Interface-for-Sun-GTIL2-1000)
+# 1 = Trucki RS485/UART for SUN1000  (https://github.com/trucki-eu/RS485-Interface-for-Sun-GTIL2-1000)
 lt_devtype = 0
 
 # If a lumentree is installed but you want to use another Device or simulator, 
@@ -288,10 +294,10 @@ lt_efficacy_factor = 90
 #Max Temperature for the device (for all the same). If Temp > MaxTemp = Stop
 lt_MaxTemp = 60
 
-#How much Lumentree devices you have installed. Max is 3
+#How much Lumentree/Trucki devices you have installed. Max is 3
 lt_count    = 1
 
-#select the right device and values for each Lumentree
+#select the right device and values for each Lumentree or Trucki
 lt1_device  = /dev/ttyUSB0
 lt1_address = 1
 lt1_maxwatt = 570
@@ -396,7 +402,7 @@ MW_NPB_MaxTemp     = 50
 #Measure the outputvoltage of the MW Device with a good multimeter
 #Discharge is not so critical as long as you do not specify absolute minimum
 #Chargevoltage should be correct as good as can be. Otherwise too high or too low voltage used
-#This values only applies to the Dis-/Charger Set settings, not the reading of the voltage value from the device !
+#This values only applies to the Discharger and Charger Set settings, not the reading of the voltage value from the device !
 #For reading adjustment of DC Voltage correction see "BatteryVoltageCorrection" above
 MW_NPB_ChargeVoltCorr    = 0
 MW_BIC_ChargeVoltCorr    = 0
@@ -411,7 +417,6 @@ ForceBicAlwaysOn = 0
 #Max. efficiency factor in % of the BIC2000 DisCharger mode (datasheet), needed for Ah calculation 
 #Check with your setup if this match and adjust if needed
 BIC2200_efficacy_factor = 93
-
 
 # Meanwell counter for changes. READ ONLY !!
 MW_NPB_COUNTER = 0
