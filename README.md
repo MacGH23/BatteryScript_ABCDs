@@ -31,7 +31,16 @@ This can only be updated by Meanwell ! <br>
 Therefore several options are available to configure.<br>
 - ZeroDeltaChargerWatt       =    30 (range in WATT without set device to new value)
 - chargercounter = 8 (wait for change, multiply with METER updates in seconds.)<br>
-e.g. (Meter update all 2 seconds) x (8) = only after 16 seconds an update will be send if necessary
+e.g. (Meter update all 2 seconds) x (8) = only after 16 seconds an update will be send if necessary<br>
+
+*Note*<br>
+If EEPROM write is disabled the values which are written before disabling will be used by system start<br>
+If you want to change the "default" you have to enable write EEPROM again and change it with mycancmd.py in "/charger" folder e.g. <br>
+ `./mwcancmd.py.py systemconfigset 1`<br>
+ `./mwcancmd.py.py cvset 2760`<br>
+  `./mwcancmd.py.py dvset 2440`<br>
+ `./mwcancmd.py.py systemconfigset 1025`<br>
+
 
 **Discharger:**
 * Meanwell BIC-2200<br>
@@ -165,17 +174,22 @@ For the serial communication with Lumentree and BMS the user must be added to di
 `sudo usermod -a -G tty $USER`<br>
 
 **Lumentree installation hints:<br>**
-- Lumentree can not be updaeted too quickly <br>
+- Disable ModemManager to prevent scanning COM ports<br>
+`sudo systemctl stop ModemManager`<br>
+`sudo systemctl disable ModemManager`<br>
+
+- Lumentree can not be updated too quickly <br>
 Setting recommendation: <br>
 LastDisChargePower_delta = 15 (between 10..20)<br>
 DisChargerPowerCalcCount = 4 (or higher)<br> 
-If you have problems (no answer or checksum error) with the USB RS232 adapter it could be that Lumentree DSUB9 is not 100% compartible. <br>
+If you have problems (no answer or checksum error) with the USB RS232 adapter it could be that Lumentree DSUB9 connector is not 100% compatible with RS232 spec. <br>
 It uses <br>
 PIN2 : TX<br>
 PIN3 : RX<br>
 PIN5 : GND<br>
 PIN9 : 12V <-- This can cause communication errors or defect for the USB<->RS232 adapter.<br>
 In this case use a additional cable from the USB RS232 which only uses PIN2, PIN3, GND (USB -> RS232 -> Cable PIN2/3/GND -> Lumentree)<br>
+Or remove PIN9 from the RS232 adapter<br>
 Or use a RS232 port protector (1:1) and remove PIN9 <br>
 ![RS232_pp](/pictures/RS232_portprotect.jpg "RS232pp")<br>
 
@@ -207,6 +221,11 @@ Add a:<br>
 * Add the devices in the StartStop[Dis]Charger functions
 * For BMS devices see the BMS sections for it
 * Add the initialisation and shutdown code in "main" and "onexit"<br><br>
+
+**CAN devices hints:<br>**
+If you see problems during init of CAN device, check / add an entry in<br>
+` sudo nano /etc/host`  <br>
+127.0.1.1       [Hostname of your Raspberry] <br>
 
 **Credits:<br>**
 Thanks to:<br>

@@ -31,6 +31,7 @@ def Method_1():
     try:
 #		 Example for changing the paramter before starting the script	
 #        updater = ConfigUpdater()
+#        updater["Setup"]["BSstart_UsedConfig"].value     = '1'
 #        updater["Setup"]["LastDisChargePower_delta"].value    = '10'
 #        updater["Setup"]["ZeroDeltaDisChargeWATT"].value      = '10'
 #        updater.update_file()
@@ -42,10 +43,26 @@ def Method_1():
         print(str(e))
 
 def Method_2():
+    try:
+        updater = ConfigUpdater()
+        updater.read("/home/pi/chargerscript/BSsetup.conf")
+        updater["Setup"]["BSstart_UsedConfig"].value     = '2'
+        updater.update_file()
+    except Exception as e:
+        print(str(e))
+
     print("Method 2")
     startBS()
 
 def Method_3():
+    try:
+        updater = ConfigUpdater()
+        updater.read("/home/pi/chargerscript/BSsetup.conf")
+        updater["Setup"]["BSstart_UsedConfig"].value     = '3'
+        updater.update_file()
+    except Exception as e:
+        print(str(e))
+
     print("Method 3")
     startBS()
 
@@ -60,7 +77,8 @@ if len (sys.argv) == 1:
     print("e.g.            : ./BSstart 0")
     sys.exit()
 
-p = os.path.dirname(__file__)
+p = os.path.dirname(os.path.abspath(__file__))
+print(p)
 #Just start using Tmux. Wait 5 seconds to be sure the last session is closed completly 
 print("WAIT 5 seconds to start ... ")
 sleep(5)

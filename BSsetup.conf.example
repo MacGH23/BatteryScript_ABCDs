@@ -17,7 +17,10 @@
 # OTHERWISE THE SCRIPT CAN HANGUP OR THE HARDWARE CAN DECREASE FASTER !
 # 
 # FOR MEANWELL DEVICES CHANGE "MeterUpdateCounter" BELOW, SEE EXPLANATION ! 
-i_changed_my_config = 0
+i_changed_my_config = 1
+
+#If you use BS_Start for multible configuration, the last used is saved
+BSstart_UsedConfig = 0
 
 # Enter Loglevel 0,10,20,30,40,50 
 # CRITICAL   50
@@ -186,8 +189,8 @@ http_schedule_time = 2
 # 
 mqttserver= 192.168.178.100
 mqttport  = 1883
-mqttuser  = mqtt
-mqttpass  = mqtt
+mqttuser  = mqttuser
+mqttpass  = mqttpass
 #IMPORTANT
 #The subscription topic must have the power in WATT (+ and -) 
 #positiv = from Grid, negative = from Solar/Battery
@@ -245,18 +248,21 @@ MaxDisChargeWATT           =   570
 #NOTE: For Meanwell specify in Meanwell section in Ampere
 MinDisChargeWATT           =    28  
 
-#LastInverterPower hyteresis, dont change the output if new value in this range (+ and -)
+#LastInverterPower hyteresis, dont change the charging if new value in this range (+ and -)
 LastChargePower_delta      =    10
-
-#Do not upload power to Grid, always take (a bit) power from grid
-#not implemented now
-ZeroDeltaChargerWatt       =    0
 
 #LastInverterPower hysteresis, do not change the output if new value in this range (+ and -)
 LastDisChargePower_delta   =    15
 
-#Reduce x Watt from Discharger output to prevent output to GRID 
-ZeroDeltaDisChargeWATT     =    10
+#Reduce x Watt from Charger output to prevent charging from GRID 
+#positive value, reduce charging Watt
+#negative value, not implemented
+ZeroDeltaChargerWATT       =    0
+
+#Reduce/Add x Watt from Discharger output to prevent output/input to GRID 
+#positive value, minimize Battery output to GRID (less Battery than needed)
+#negative value, minimize get power from GRID (more Battery than needed)
+ZeroDeltaDisChargeWATT     =    0
 
 # How much Meter changes count before change output
 # #### IMPORTANT FOR MEANWELL ####
@@ -284,8 +290,6 @@ lt_devtype = 0
 
 # If a lumentree is installed but you want to use another Device or simulator, 
 # the lumentree will start at max power during startup, this will prevent this
-# Power in WATT ! 
-# 570W = 570
 lt_foreceoffonstartup    = 0
 #Max. Efficacy Factor in % of the Lumentree (datasheet), needed for Ah calculation 
 #Check with your setup if this match and adjust if needed
@@ -297,7 +301,9 @@ lt_MaxTemp = 60
 #How much Lumentree/Trucki devices you have installed. Max is 3
 lt_count    = 1
 
-#select the right device and values for each Lumentree or Trucki
+# Power in WATT ! 
+# 570W = 570
+# select the right device and values for each Lumentree or Trucki
 lt1_device  = /dev/ttyUSB0
 lt1_address = 1
 lt1_maxwatt = 570
@@ -337,7 +343,7 @@ CellvoltageMax         = 345
 #When the charger stopped charging because of low current, 
 #this value defines when charging is allowed again
 #Voltage drop after stop charging
-CellvoltageMaxRestart  = 333     
+CellvoltageMaxRestart  = 334
 
 #Min cell voltage for calculation of min Battery voltage (e.g. 8*305 = 2440 = 24,40V) 
 #mainly done via BMS SOC check but normally not very exact. 

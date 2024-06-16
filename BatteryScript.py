@@ -25,6 +25,9 @@
 # Hints
 # For the serial communication the user must be added to dialout group
 # sudo usermod -a -G tty $USER
+# Disable ModemManager to prevent scanning COM ports
+# sudo systemctl stop ModemManager
+# sudo systemctl disable ModemManager
 #
 # API mqtt:   https://eclipse.dev/paho/index.php?page=clients/python/docs/index.php
 # API modbus: https://minimalmodbus.readthedocs.io/en/stable/apiminimalmodbus.html#apiminimalmodbus
@@ -47,6 +50,9 @@
 # macGH 10.04.2024  Version 0.2.7: Added Constant Based Charger via external switch
 # macGH 24.04.2024  Version 0.2.8: Update to paho-mqtt 2.0, fixed MW Check EEPROM Write
 # macGH 10.05.2024  Version 0.2.9: Some small changes
+# macGH 17.05.2024  Version 0.3.0: Some changes and changes with mwcanlib
+# macGH 04.06.2024  Version 0.3.1: Errorhandling during powermeter dis/rereconnect
+# macGH 14.06.2024  Version 0.3.2: Added NPB Voltage adaption for smaller than Mincurrent charge, added ZerodeltaChargerWatt
 
 import os
 import sys
@@ -404,8 +410,9 @@ class Devicestatus:
         self.LT2_Temperature            = 0
         self.LT3_Temperature            = 0
         self.MW_NPB_Temperature         = 0
-        self.MW_BIC_Temperature         = 0
         self.MW_EEPromOff               = 0
+        self.MW_BIC_Temperature         = 0
+        self.MW_ChargeVoltage           = 0
         self.ltcounter                  = 0
 
 class chargerconfig:
@@ -455,6 +462,7 @@ class chargerconfig:
             mylogs.debug("Read config ...")
 
             self.i_changed_my_config       =  int(updater["Setup"]["i_changed_my_config"].value)
+            self.BSstart_UsedConfig        =  int(updater["Setup"]["BSstart_UsedConfig"].value)
             self.ChargerPowerCalcCount     =  int(updater["Setup"]["ChargerPowerCalcCount"].value)
             self.DisChargerPowerCalcCount  =  int(updater["Setup"]["DisChargerPowerCalcCount"].value)
             status.powercalccount = self.ChargerPowerCalcCount
@@ -469,7 +477,6 @@ class chargerconfig:
             self.FixedChargeVoltage        =  self.CellCount * self.CellvoltageMax
             self.StopDischargeVoltage      =  self.CellCount * self.CellvoltageMin
             self.RestartChargevoltage      =  self.CellCount * self.CellvoltageMaxRestart
-            self.RestartDisChargevoltage   =  self.CellCount * self.CellvoltageMinRestart
             self.RestartDisChargevoltage   =  self.CellCount * self.CellvoltageMinRestart
             self.BatteryTotalWH            =  round(self.CellCount * self.CellAH * 3.2 * 1000)
 
@@ -486,7 +493,7 @@ class chargerconfig:
             self.StopMinChargeCurrent      =  int(updater["Setup"]["StopMinChargeCurrent"].value)
             self.MaxDisChargeWATT          =  int(updater["Setup"]["MaxDisChargeWATT"].value)
             self.MinDisChargeWATT          =  int(updater["Setup"]["MinDisChargeWATT"].value)
-            self.ZeroDeltaChargerWatt      =  int(updater["Setup"]["ZeroDeltaChargerWatt"].value)
+            self.ZeroDeltaChargerWATT      =  int(updater["Setup"]["ZeroDeltaChargerWATT"].value)
             self.ZeroDeltaDisChargeWATT    =  int(updater["Setup"]["ZeroDeltaDisChargeWATT"].value)
             self.MeterUpdateChargeCounter  =  int(updater["Setup"]["MeterUpdateChargeCounter"].value)
             self.MeterUpdateDisChargeCounter=  int(updater["Setup"]["MeterUpdateDisChargeCounter"].value)
@@ -617,7 +624,7 @@ class chargerconfig:
 
             mylogs.info("MaxChargeCurrent:           " + str(self.MaxChargeCurrent))
             mylogs.info("MinChargeCurrent:           " + str(self.MinChargeCurrent))
-            mylogs.info("ZeroDeltaChargerWatt:       " + str(self.ZeroDeltaChargerWatt))
+            mylogs.info("ZeroDeltaChargerWATT:       " + str(self.ZeroDeltaChargerWATT))
             mylogs.info("MaxDisChargeCurrent:        " + str(self.MaxDisChargeCurrent))
             mylogs.info("ZeroDeltaDisChargeWATT:     " + str(self.ZeroDeltaDisChargeWATT))
 
@@ -759,10 +766,14 @@ def on_exit():
                 mqttclient.disconnect()
                 mqttclient.loop_stop()
 
-        sleep(0.5) # wait to be sure that mqtt is really down and no new message will be proceed !
-        cfg.ForceBicAlwaysOn = 0 #Prevent BIC will not shutdown
-        StartStopOperationCharger(0,1)
-        StartStopOperationDisCharger(0,1)
+        try:
+            sleep(0.5) # wait to be sure that mqtt is really down and no new message will be proceed !
+            cfg.ForceBicAlwaysOn = 0 #Prevent BIC will not shutdown
+            StartStopOperationCharger(0,1)
+            StartStopOperationDisCharger(0,1)
+        except Exception as e:
+                mylogs.error("ON EXIT EXCEPTION at START STOP OPERATION!")
+                mylogs.error(str(e))
 
 #        if (cfg.Selected_Device_Charger == 2):
 #            mylogs.verbose("CONSTANT BASED CHARGER SETUP")
@@ -1044,7 +1055,7 @@ def StartStopOperationCharger(val,force=0):
         status.BatteryFULL = 0
 
     #Battery is full, stop charing and wait for discharge
-    if((status.ChargerStatus  == 1)  and (status.LastChargerGetCurrent <= cfg.StopMinChargeCurrent) and ((status.BatteryVoltage+10) > cfg.FixedChargeVoltage)): # and (status.BMSSOC > 97)): 
+    if((status.BatteryFULL == 0) and (status.ChargerStatus  == 1)  and (status.LastChargerGetCurrent <= cfg.StopMinChargeCurrent) and ((status.BatteryVoltage+10) > cfg.FixedChargeVoltage)): # and (status.BMSSOC > 97)): 
         mylogs.info("StartStopOperationCharger: Battery Full ! - Charging current too small: " + str(status.LastChargerGetCurrent) + " - Min: " + str(cfg.StopMinChargeCurrent))
         status.BatteryFULL = 1
         force = 2 #force stop charging, 2 if BIC is used with always on
@@ -1055,34 +1066,43 @@ def StartStopOperationCharger(val,force=0):
         mylogs.info("StartStopOperationCharger: Battery Full ! - Nothing to do ... - Time for Idleling ;-)")
         val = 0
     
+    Newval = val      #used for calculation later
+
     if (force==0): #if force = 1, proceeed without any logic 
         if (status.ChargerStatus == 0) and (val == 0): 
             mylogs.verbose("StartStopOperationCharger already off mode")
             return #DisCharger already off, can stop here
     
         #Check if we need to set the new value to the Charger
-        p = abs(status.LastWattValueUsedinDevice - val)
+        p = abs((status.LastWattValueUsedinDevice + status.ZeroImportWatt) - val )
     
         if ((val != 0) and (p <= cfg.LastChargePower_delta)):
             mylogs.info("No change to Charger output, Delta is: " + str(p) + "  - Set to :" + str(cfg.LastChargePower_delta))
             return
 
-    if(force==0): 
-        SetPowerValArray(cfg.ChargerPowerCalcCount,val)
+        status.ZeroImportWatt = 0
+        if (cfg.ZeroDeltaChargerWATT > 0):
+            if (val < cfg.ZeroDeltaChargerWATT):
+                Newval = val + cfg.ZeroDeltaChargerWATT
+                status.ZeroImportWatt = cfg.ZeroDeltaChargerWATT
+            mylogs.info("ZEROImport: Meter: " + str(val) + " -> ZeroWatt: " + str(Newval) + " (Delta: " + str(cfg.ZeroDeltaChargerWATT) + ")")
+
+        if(val != 0): 
+            SetPowerValArray(cfg.ChargerPowerCalcCount,Newval)
 
     if (cfg.Selected_Device_Charger <= 1): #BIC and NPB-abc0
         #try to set the new ChargeCurrent if possible
-        Charger_Meanwell_Set(val,force)
+        Charger_Meanwell_Set(Newval,force)
         return
     
     if (cfg.Selected_Device_Charger == 2):     #ConstantBasedCharger
         status.LastWattValueUsedinDevice = 0;  #prevent wrong calulation
-        Const_Based_Charger_Set(val,force)
+        Const_Based_Charger_Set(Newval,force)
         return     
 
     if (cfg.Selected_Device_Charger == 255):     #Simulator
         status.LastWattValueUsedinDevice = 0;  #prevent wrong calulation
-        mylogs.info("Simulator Charger set to: " + str(val) + "W")
+        mylogs.info("Simulator Charger set to: " + str(Newval) + "W")
         return     
 
     mylogs.error("Charger type not supported yet")
@@ -1128,6 +1148,7 @@ def StartStopOperationDisCharger(val,force=0):
         mylogs.error("StartStopOperationDisCharger: Battery Voltage can not be read. Battery Voltage: 0")
         val = 0
 
+    Newval = val      #used for calculation
     if (force==0): #if force = 1, proceeed without any logic 
 
         if((status.DisChargerStatus == 0) and (val == 0)): 
@@ -1143,16 +1164,15 @@ def StartStopOperationDisCharger(val,force=0):
             #status.actchargercounter = 1 #Reset counter to 1
             return
 
-    Newval = val      #used for calculation
-    status.ZeroExportWatt = 0
-    if (cfg.ZeroDeltaDisChargeWATT > 0):
-        if (val > cfg.ZeroDeltaDisChargeWATT):
-            Newval = val - cfg.ZeroDeltaDisChargeWATT
-            status.ZeroExportWatt = cfg.ZeroDeltaDisChargeWATT
-            mylogs.info("ZEROExport: Meter: " + str(val) + " -> ZeroWatt: " + str(Newval) + " (Delta: " + str(cfg.ZeroDeltaDisChargeWATT) + ")")
-
-    if(force==0): 
-        SetPowerValArray(cfg.DisChargerPowerCalcCount,val)
+        status.ZeroExportWatt = 0
+        if (cfg.ZeroDeltaDisChargeWATT != 0): #03062024 >0
+            if (val > cfg.ZeroDeltaDisChargeWATT):
+                Newval = val - cfg.ZeroDeltaDisChargeWATT
+                status.ZeroExportWatt = cfg.ZeroDeltaDisChargeWATT
+                mylogs.info("ZEROExport: Meter: " + str(val) + " -> ZeroWatt: " + str(Newval) + " (Delta: " + str(cfg.ZeroDeltaDisChargeWATT) + ")")
+    
+        if(val != 0): 
+            SetPowerValArray(cfg.DisChargerPowerCalcCount,val)
 
     #Which Device used
     mylogs.debug("StartStopOperationDisCharger: " + str(Newval))
@@ -1263,6 +1283,7 @@ def StartStopOperationMeanwell(val, CD, force=0):
     return val
 
 def Charger_Meanwell_Voltage_controller(newCout):
+        #-1 712  8
         #-2 628 84
         #-3 528 100
         #-4 452 76
@@ -1272,21 +1293,55 @@ def Charger_Meanwell_Voltage_controller(newCout):
         #-8 162 71
         #-9 0   162
 
+    #return -1 # not implemented now
     mylogs.verbose("Charger_Meanwell_Voltage_controller - New current: " + str(newCout))
 
     #We only do this voltage chargeadjust if EEPROM Write is OFF
-    if(status.MW_EEPromOff == 1): 
-        return
+    if(status.MW_EEPromOff == 0): 
+        mylogs.error("Charger_Meanwell_Voltage_controller - EEPROM WRITE IS NOT DISABLED - STOP")
+        return -1
+
+    if(cfg.Selected_Device_Charger != 1): #NPB
+        mylogs.verbose("Charger_Meanwell_Voltage_controller - Only for NPB Charger")
+        return -1
     
-    if(newCout >= cfg.MinChargeCurrent):
-        NewVoltage = cfg.FixedChargeVoltage + MW_ChargeVoltCorr
-    else:
-        NewVoltage = status.ChargerVoltage - (round((cfg.MinChargeCurrent - newCout) / 80))
+    if(newCout == 0): 
+        mylogs.verbose("Charger_Meanwell_Voltage_controller - Disable output")
+        return -1
 
     rval = mwcandev.v_out_set(0,0)
+    sleep(0.1)
+
+    if(newCout >= cfg.MinChargeCurrent):
+        NewVoltage = status.MW_ChargeVoltage
+    else:
+        diffCurrent = newCout - status.LastChargerGetCurrent
+        if(abs(diffCurrent) < 80):
+            mylogs.info("Charger_Meanwell_Voltage_controller - DIFFCURRENT too small: " + str(diffCurrent))
+            return 0
+        else:
+            mylogs.info("Charger_Meanwell_Voltage_controller - DIFFCURRENT: " + str(diffCurrent))
+        
+        if(diffCurrent > 0):
+            diffVolt = 1     #increase voltage by 0.01V
+        else:
+            diffVolt = -1    #decrease voltage by 0.01V
+
+        mylogs.info("Charger_Meanwell_Voltage_controller - DIFFVOLT: " + str(diffVolt))
+    
+        if (rval-10) > status.ChargerVoltage:
+            NewVoltage = status.ChargerVoltage + diffVolt
+        else:
+            NewVoltage = rval + diffVolt
+
     if(rval != NewVoltage):
-        mylogs.verbose("Charger_Meanwell_Voltage_controller - SET Voltage to: " + str(NewVoltage))
+        mylogs.info("Charger_Meanwell_Voltage_controller - NEW SET Voltage to: " + str(NewVoltage))
         mwcandev.v_out_set(1,NewVoltage)
+        MW_EEPROM_Counter_INC(1)
+        return 1
+    else:
+        mylogs.verbose("Charger_Meanwell_Voltage_controller - Already SET Voltage to: " + str(NewVoltage))
+        return 1
 
 def Charger_Meanwell_Set(val,force=0):
     try:
@@ -1323,8 +1378,19 @@ def Charger_Meanwell_Set(val,force=0):
         #NPB device has a minimal charge current
         #Stop if this value is reached or allow take power from grid to charge 
         if (IntCurrent <= cfg.MinChargeCurrent):
+            #Check if we can lower the voltage to reduce current, only for NPB
+            if(Charger_Meanwell_Voltage_controller(IntCurrent) == -1):
+                mylogs.info("Charger_Meanwell_Set: Current too small - " + str(IntCurrent) + " - MinCurrent: " + str(cfg.MinChargeCurrent) + " -> Device OFF")
+                IntCurrent = 0;
+                OPStart = False 
+            else:
+               IntCurrent = cfg.MinChargeCurrent
+               mylogs.info("Charger_Meanwell_Set: Current / Voltage adapted")
+               OPStart = True
+
             #calculate ZeroDelta if configured
-            ZeroDelta = int((cfg.ZeroDeltaChargerWatt / vout)*10000)
+            '''
+            ZeroDelta = int((cfg.ZeroDeltaChargerWATT / vout)*10000)
             status.ZeroImportWatt = 0 #Reset to 0 and see if we need it later
 
             if (IntCurrent < (cfg.MinChargeCurrent - ZeroDelta)):
@@ -1335,16 +1401,20 @@ def Charger_Meanwell_Set(val,force=0):
                 IntCurrent = cfg.MinChargeCurrent
                 status.ZeroImportWatt = int((cfg.MinChargeCurrent - ZeroDelta)*vout/10000)
                 mylogs.info("Charger_Meanwell_Set: ZeroImportWatt used - allow from GRID: " + str(status.ZeroImportWatt))
+                OPStart = True
+            '''
+        else: #Reset to standard voltage 
+            Charger_Meanwell_Voltage_controller(IntCurrent)
 
         if (IntCurrent != status.LastChargerSetCurrent):
             if ((status.actchargercounter >= cfg.MeterUpdateChargeCounter) or (force==1)):
                 mylogs.info("Charger_Meanwell_Set: >>>> Set new current to: " + str(IntCurrent) + "  (Last current set: " + str(status.LastChargerSetCurrent) + ") <<<<")
                 
                 if(IntCurrent == 0):
-                    #Probably no need to set since device will be set to OFF mode
+                    #Probably no need to set since device will be set to OFF mode for NBP, but BIC needs to be set to Min 0 = MinChargeCurrent by lib
                     if(cfg.ForceBicAlwaysOn == 1): #only for BIC in always on mode, set to MinChargeCurrent since 0 is not possible
-                        mylogs.info("Charger_Meanwell_Set: BIC-2200 SET IntCurrent = MinChargerCurrent")
-                        c = mwcandev.i_out_set(1,mwcandev.dev_MinChargeVoltage) #(1,IntCurrent)
+                        mylogs.info("Charger_Meanwell_Set: BIC-2200 SET IntCurrent = 0 = MinChargerCurrent")
+                        c = mwcandev.i_out_set(1,0) #(1,IntCurrent)
                         MW_EEPROM_Counter_INC(0)
                         sleep(0.3)
                     else:
@@ -1362,7 +1432,7 @@ def Charger_Meanwell_Set(val,force=0):
                         status.LastChargerSetCurrent = IntCurrent;
                         MW_EEPROM_Counter_INC(0)
                         OPStart = True #device start or continue
-                        sleep(0.4)
+                        sleep(0.3)
                         
                 status.actchargercounter = 1 #Reset counter to 1
             else:
@@ -1378,13 +1448,6 @@ def Charger_Meanwell_Set(val,force=0):
                 OPStart = True #device start or continue
             
                 
-    #    if(OPStart):
-    #        status.ChargerStatus  = 1
-    #    else:
-    #        status.ChargerStatus  = 0
-    #        status.ZeroImportWatt = 0
-        
-
         #IF Bic uses always on OPstart True
         if((cfg.ForceBicAlwaysOn == 1) and (force != 1)): OPStart = True
 
@@ -1449,15 +1512,14 @@ def DisCharger_BIC2200_Set(val,force=0):
         if (IntCurrent >= cfg.MaxDisChargeCurrent):
             IntCurrent = cfg.MaxDisChargeCurrent 
 
-    #    #calculate ZeroDelta if configured
-        ZeroDelta = int((cfg.ZeroDeltaDisChargeWATT / vout)*10000)
+        #calculate ZeroDelta if configured
+        ZeroDelta = int((status.ZeroExportWatt / vout)*10000)
         mylogs.verbose("ZERODELTA IS: " + str(ZeroDelta))
-        status.ZeroExportWatt = 0 #Reset to 0 and see if we need it later
 
         #BIC device has a minimal DisCharge current
         #Stop if this value is reached or allow take power from grid to charge 
         if (IntCurrent <= cfg.MinDisChargeCurrent):
-            if (IntCurrent < (cfg.MinDisChargeCurrent - ZeroDelta)):
+            if (IntCurrent < (cfg.MinDisChargeCurrent)):# - ZeroDelta)): 16042024
                 if(cfg.ForceBicAlwaysOn == 1): #BIC set to Min
                     IntCurrent = cfg.MinDisChargeCurrent
                     mylogs.info("Meanwell BIC: Current too small - " + str(IntCurrent) + " - MinCurrent: " + str(cfg.MinDisChargeCurrent) + " - ZeroDelta: " + str(ZeroDelta)+ " -> Always ON")
@@ -1468,8 +1530,8 @@ def DisCharger_BIC2200_Set(val,force=0):
                     OPStart = False 
             else:
                 IntCurrent = cfg.MinDisChargeCurrent
-                status.ZeroImportWatt = cfg.ZeroDeltaChargerWatt
-                mylogs.info("Meanwell BIC: ZeroExportWatt used - " + str(cfg.ZeroDeltaDisChargeWATT))
+                #status.ZeroImportWatt = cfg.ZeroDeltaChargerWATT #14062024
+                mylogs.info("Meanwell BIC: ZeroExportWatt used - " + str(status.ZeroExportWatt))
 
         if (IntCurrent != status.LastDisChargerCurrent):
             if ((status.actchargercounter >= cfg.MeterUpdateDisChargeCounter) or (force==1)):
@@ -1478,7 +1540,7 @@ def DisCharger_BIC2200_Set(val,force=0):
                 status.LastDisChargerCurrent = IntCurrent;
                 MW_EEPROM_Counter_INC(1)
                 status.actchargercounter = 1 #Reset counter to 1 
-                sleep(0.4) #wait for next read
+                sleep(0.4) #wait for next read to change BIC
             else:
                 mylogs.info("Meanwell BIC: Wait for next change: " + str(status.actchargercounter) + "  of: " + str(cfg.MeterUpdateDisChargeCounter))
                 status.actchargercounter += 1
@@ -1495,7 +1557,6 @@ def DisCharger_BIC2200_Set(val,force=0):
         else: 
             mylogs.verbose("OPSTART FALSE: Stop BIC2200")
             status.DisChargerStatus  = 0
-    #        status.ZeroExportWatt = 0
             StartStopOperationMeanwell(0,1,force)     
 
         sleep(0.2)
@@ -1898,14 +1959,15 @@ def process_power(power):
         if (cfg.PowerControlmethod == 1):
             mylogs.debug("PowerControlmethod: 1 - Universal mode")
 
-            if (status.ZeroImportWatt > 0):      #charger aviod to take from Grid for charging, check if still valid
-                if((NewPower + status.ZeroImportWatt) > cfg.ZeroDeltaChargerWatt):
+            '''
+            if (status.ZeroImportWatt > 0):      #charger avoid to take from Grid for charging, check if still valid
+                if((NewPower + status.ZeroImportWatt) > cfg.ZeroDeltaChargerWATT):
                     status.ZeroImportWatt = 0   #too much delta, reset and use normal way
                 else:
                     mylogs.verbose("ChargeMethod: 1 with ZeroImport")
                     StartStopOperationCharger(NewPower)
                     return power
-
+            '''
             # Charge / Discharge calculation
             # charge, getting power from PV, charge battery now 
             if(NewPower < 0):
@@ -1964,6 +2026,10 @@ def http_request():
     except Exception as e:
         mylogs.error("HTTP CONNECTION ERROR")
         mylogs.error(str(e))
+        #reset Empty and Full, to be sure so start at 0 after a disconnect
+        status.BatteryEMPTY = 0 
+        status.BatteryFULL  = 0
+
         #Stop Operation if setting set
         if(cfg.StopOnConnectionLost==1):
             StartStopOperationCharger(0,1)
@@ -1979,6 +2045,7 @@ def simulator_request():
     #--------- Create a random power value
     
     power = random.randrange(-500, 500, 10)        
+    power = -50 - status.LastWattValueUsedinDevice
     process_power(power)
 
 #####################################################################
@@ -1987,6 +2054,9 @@ def simulator_request():
 #def mqtt_on_connect(client, userdata, flags, rc): #mqtt < 2.00
 def mqtt_on_connect(client, userdata, flags, reason_code, properties):
     mylogs.info("mqtt: Connected with mqttserver")
+    #reset Empty and Full, to be sure so start at 0 after a disconnect
+    status.BatteryEMPTY = 0 
+    status.BatteryFULL  = 0
     #Subscribe for actual Power from mqtt server
     if (cfg.GetPowerOption==0):
         mylogs.info("mqtt: Subscribe for toipc " + cfg.mqttsubscribe)
@@ -2193,29 +2263,6 @@ if (cfg.Selected_Device_Charger <=1):
     Voltage_IN = Voltage_IN + cfg.Voltage_ACIN_correction
     mylogs.info("Grid Voltage: " + str(Voltage_IN) + " V")
 
-    #Check EEPROM write disable (only available with a FW > 02/2024!)
-    sc  = mwcandev.system_config(0,0)
-    if(not is_bit(sc,SYSTEM_CONFIG_EEP_OFF)):
-        mylogs.warning("MEANWELL EEPROM WRITE BACK IS ENABLED.")
-        if(not is_bit(cfg.i_changed_my_config,1)):
-            mylogs.warning("MEANWELL SYSTEM CONFIG BIT - TRY TO SET EEPROM WRITE OFF ...")
-            cfg.i_changed_my_config = set_bit(cfg.i_changed_my_config,1) #save the try to prvent to try again and again 
-            
-            sc = set_bit(int(sc),SYSTEM_CONFIG_EEP_OFF)
-            mwcandev.system_config(1,sc)
-            sleep(0.3)
-            sc  = mwcandev.system_config(0,0)
-            if(not is_bit(sc,SYSTEM_CONFIG_EEP_OFF)):
-                mylogs.warning("MEANWELL SYSTEM CONFIG BIT - COULD NOT SET EEPROM WRITE OFF")
-                mylogs.warning("MEANWELL EEPROM WRITE IS STILL ENABLED. WITH A FIRMWARE > April / 2024 THIS CAN BE DISABLED")
-            else:
-                status.MW_EEPromOff = 1    
-                mylogs.warning("MEANWELL SYSTEM CONFIG BIT - EEPROM WRITE IS DISABLED")
-    else:
-        status.MW_EEPromOff = 1    
-        mylogs.info("MEANWELL SYSTEM CONFIG - EEPROM WRITE IS DISABLED")
-
-##################
     #Meanwell BIC-2200 specific
     if (cfg.Selected_Device_Charger==0):
         #setup Bic2200
@@ -2269,8 +2316,8 @@ if (cfg.Selected_Device_Charger <=1):
     if (cfg.Selected_Device_Charger==1):
         #setup NPB
         MW_ChargeVoltCorr = cfg.MW_NPB_ChargeVoltCorr
-        sc  = mwcandev.system_config(0,0)
-        cuve = mwcandev.NPB_curve_config(0,0,0) #Bit 7 should be 0
+        sc   = mwcandev.system_config(0,0)
+        cuve = mwcandev.NPB_curve_config(0,0) #Bit 7 should be 0
         mylogs.debug("NPB SystemConfig: " + str(sc) + " CURVE_CONFIG: " + str(cuve))
 
             #Bit 7 is 1 --> Charger Mode             #check OFF during startup
@@ -2278,7 +2325,7 @@ if (cfg.Selected_Device_Charger <=1):
             print("MEANWELL NPB IS NOT IN PSU MODE / NOT OFF during STARTUP OR EEPROM WRITE IS ENABLED!!!\n")
             c = input("SET PSU MODE NOW ? (y/n): ")
             if(c == "y"):
-                cuve = mwcandev.NPB_curve_config(1,CURVE_CONFIG_CUVE,0) #Bit 7 should be 0
+                cuve = mwcandev.NPB_curve_config_pos(1,CURVE_CONFIG_CUVE,0) #Bit 7 should be 0
                 sc = clear_bit(sc,1)
                 sc = clear_bit(sc,2)
                 sc  = mwcandev.system_config(1,sc) #bit 10 only set to 1
@@ -2288,8 +2335,9 @@ if (cfg.Selected_Device_Charger <=1):
 
     #Set fixed charge voltage to device BIC and NPB
     rval = mwcandev.v_out_set(0,0)
-    if(rval != cfg.FixedChargeVoltage + MW_ChargeVoltCorr):
-        rval = mwcandev.v_out_set(1,cfg.FixedChargeVoltage + MW_ChargeVoltCorr)
+    status.MW_ChargeVoltage = cfg.FixedChargeVoltage + MW_ChargeVoltCorr
+    if(rval != status.MW_ChargeVoltage):
+        rval = mwcandev.v_out_set(1,status.MW_ChargeVoltage)
         MW_EEPROM_Counter_INC(0)
         mylogs.info("SET CHARGE VOLTAGE: " + str(rval))
     else:
@@ -2322,7 +2370,34 @@ if (cfg.Selected_Device_Charger <=1):
             MW_EEPROM_Counter_INC(1)
         StartStopOperationMeanwell(1,1,1)
 
-#CAN INIT for CAN device: 0=bic2200, 1=NPB
+#######################
+    #Check EEPROM write disable (only available with a FW > 02/2024!)
+    #Do this at the end of init to write the correct setting to the device before disable EEPROM write
+    sc  = mwcandev.system_config(0,0)
+    if(not is_bit(sc,SYSTEM_CONFIG_EEP_OFF)):
+        mylogs.warning("MEANWELL EEPROM WRITE BACK IS ENABLED.")
+        if(not is_bit(cfg.i_changed_my_config,1)):
+            mylogs.warning("MEANWELL SYSTEM CONFIG BIT - TRY TO SET EEPROM WRITE OFF ...")
+            cfg.i_changed_my_config = set_bit(cfg.i_changed_my_config,1) #save the try to prvent to try again and again 
+            
+            sc = set_bit(int(sc),SYSTEM_CONFIG_EEP_OFF)
+            mwcandev.system_config(1,sc)
+            sleep(0.3)
+            sc  = mwcandev.system_config(0,0)
+            if(not is_bit(sc,SYSTEM_CONFIG_EEP_OFF)):
+                mylogs.warning("MEANWELL SYSTEM CONFIG BIT - COULD NOT SET EEPROM WRITE OFF")
+                mylogs.warning("MEANWELL EEPROM WRITE IS STILL ENABLED. WITH A FIRMWARE > April / 2024 THIS CAN BE DISABLED")
+            else:
+                status.MW_EEPromOff = 1    
+                mylogs.warning("MEANWELL SYSTEM CONFIG BIT - EEPROM WRITE IS DISABLED")
+    else:
+        status.MW_EEPromOff = 1    
+        mylogs.info("MEANWELL SYSTEM CONFIG - EEPROM WRITE IS DISABLED")
+
+##### Meanwell init end ##################
+
+
+#Init Constatnt Based Charger 
 if (cfg.Selected_Device_Charger == 2):
     mylogs.verbose("CONSTANT BASED CHARGER SETUP")
     cbc = ChargerConstBased(cfg.CBC_devid, cfg.CBC_ipadr, cfg.CBC_user, cfg.CBC_pass, cfg.loglevel)
