@@ -23,6 +23,9 @@ from meter import *
 # 7: IOBROKER
 # 8: HOMEASSISTANT
 # 9: VZLOGGER
+#10: SHELLY1PM
+#11: SHELLYPLUS1PM
+#12: SHELLYPRO1PM
 
 usedmeter           = 4
 usedip              = "192.168.179.10"
@@ -31,7 +34,7 @@ useduser            = "username"
 usedpass            = "password"
 usedvzl_uuid        = "UUID"
 usedemlog           = "index" 
-usediobrogerobject  = "0_userdata.0.CurrentPower"
+usediobrogerobject  = "YourCurrentPowerName"
 
 
 # Enter Loglevel 0,10,20,30,40,50 

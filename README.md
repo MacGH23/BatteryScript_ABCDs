@@ -19,10 +19,10 @@ x = 0..3
 
 **Current supported hardware:<br>**
 **Charger:**
-* Meanwell BIC-2200<br>
-* Meanwell NPB-[450/750/1200/1700]-[12/24/48/96]<br>
-* Constant current based power supply via external power switch <br> IP based power switch supported now: Tasmota, Shelly<br>
-* Simulator, can be used for testing<br>
+* Meanwell BIC-2200
+* Meanwell NPB-[450/750/1200/1700]-[12/24/48/96] incl. voltage adjust for Chargecurrent < MinCurrent (able to charge below MinCurrent)
+* Constant current based power supply via external power switch <br> IP based power switch supported now: Tasmota, Shelly
+* Simulator, can be used for testing
 
 *Important Note for Meanwell devices !<br>*
 Changing the output values are limited to 4.000.000 by design.<br>
@@ -33,7 +33,11 @@ Therefore several options are available to configure.<br>
 - chargercounter = 8 (wait for change, multiply with METER updates in seconds.)<br>
 e.g. (Meter update all 2 seconds) x (8) = only after 16 seconds an update will be send if necessary<br>
 
-*Note*<br>
+*Note for Meanwell NPB:*<br>
+Voltage adjust is avaiable for NPB devices. This will lower the charge voltage to lower the charge current if the charge current is smaller than min charge current.<br>
+It is not 100% exact, because the voltage <-> current is not exact, but you are able to charge.<br>
+
+*Note for all Meanwell EEPROM*<br>
 If EEPROM write is disabled the values which are written before disabling will be used by system start<br>
 If you want to change the "default" you have to enable write EEPROM again and change it with mycancmd.py in "/charger" folder e.g. <br>
  `./mwcancmd.py.py systemconfigset 1`<br>
@@ -56,11 +60,12 @@ To adjust everything automatically, you need to get the current power.<br>
 Positive = Take power from the GRID<br>
 Negative = Get power from PV<br>
 * MQTT (get vlaues from any mqtt broker)
-* Shelly (EM, 3EM, 3EMPro)
+* Shelly (EM, 3EM, 3EMPro, 1PM, 1PMPro)
 * Tasmota
 * IOBroker via simple REST API (install the "RESTful API" adapter)
 * EMLOG (not tested)
 * VZlogger (not tested)
+* AMIsLeser (not tested - https://www.mitterbaur.at/amis-leser.html)
 * Simulator, can be used for testing (random power value)<br>
 
 

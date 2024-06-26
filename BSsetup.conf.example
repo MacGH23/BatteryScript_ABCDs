@@ -394,7 +394,7 @@ DisChargerCurrentMin      =   10
 # CAN ID from the Device, set up by jumper on the device
 # BIC-2200 --> 00 to 07, all open = 07
 # NPM-abc0 --> 00 to 03, all open = 03
-USEDID = 03
+MW_USEDID = 03
 
 #Voltage in from Grid correction, NPB hat +/- 10V, you should check it with voltmeter and set the difference (with "-" if negative)
 Voltage_ACIN_correction     =   -9  
@@ -418,11 +418,17 @@ MW_BIC_DisChargeVoltCorr = 0
 #be carefull !! This can cause an overcharge problem if the CellvoltageMax is set too high (max 345 !)
 #If the Battery is empty the BIC will use power form the grid to hold CellvoltageMin ! 
 #Only use this option if you use BIC2200 as charger and discharger !
-ForceBicAlwaysOn = 0
+MW_BIC2200_ForceAlwaysOn = 0
+
+#Use Voltage Adjust for NPB-xyz.
+#This will adjust the voltage to a lower charge voltage to reduce the output current.
+#The Device can then charge below min charge current but not 100% exact.
+#Only useable if you have EEPROM write disabled, otherwise too much changes to the device
+MW_NBPVoltageAdjust = 0
 
 #Max. efficiency factor in % of the BIC2000 DisCharger mode (datasheet), needed for Ah calculation 
 #Check with your setup if this match and adjust if needed
-BIC2200_efficacy_factor = 93
+MW_BIC2200_efficacy_factor = 93
 
 # Meanwell counter for changes. READ ONLY !!
 MW_NPB_COUNTER = 0

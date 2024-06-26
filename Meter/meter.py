@@ -19,6 +19,8 @@
 
 # Version history
 # macGH 18.12.2023  Version 0.1.0
+# macGH 23.06.2024  Version 0.1.1 added new shelly and 
+#                   AMIsLeser https://www.mitterbaur.at/amis-leser.html
 
 import os
 import logging
@@ -106,6 +108,12 @@ class meter:
               return self.GetPowermeterWattsHomeAssistant()
           if self.meter == 9: #USE_VZLOGGER:
               return self.GetPowermeterWattsVZLogger()
+          if self.meter == 10: #Shelly1PM:
+              return self.GetPowermeterWattsShelly1PM()
+          if self.meter == 11: #ShellyPLUS1PM:
+              return self.GetPowermeterWattsShellyPlus1PM()
+          if self.meter == 12: #ShellyPRO1PM:
+              return self.GetPowermeterWattsShellyPro1PM()
           else:
               raise Exception("Error: no powermeter defined!")
       except:
@@ -144,14 +152,42 @@ class meter:
 #            Watts = CastToInt(input - ouput)
         logging.debug("METER: powermeter Tasmota: %s %s",Watts," Watt")
         return self.CastToInt(Watts)
-    
+
+
+    def GetPowermeterWattsShelly1PM(self):
+        url = f'http://{self.ip}/status'
+        headers = {"content-type": "application/json"}
+        ParsedData = requests.get(url, headers=headers, auth=(self.user, self.password), timeout=10).json()
+        logging.debug(ParsedData)
+        Watts = self.CastToInt(ParsedData['meters'][0]['power'])
+        logging.debug("METER: powermeter Shelly1PM: %s %s",Watts," Watt")
+        return self.CastToInt(Watts)
+
+    def GetPowermeterWattsShellyPlus1PM(self):
+        url = f'http://{self.ip}/Switch.GetStatus?id=0'
+        headers = {"content-type": "application/json"}
+        ParsedData = requests.get(url, headers=headers, auth=(self.user, self.password), timeout=10).json()
+        logging.debug(ParsedData)
+        Watts = self.CastToInt(ParsedData['apower'])
+        logging.debug("METER: powermeter ShellyPlus1PM: %s %s",Watts," Watt")
+        return self.CastToInt(Watts)
+
+    def GetPowermeterWattsShellyPro1PM(self):
+        url = f'http://{self.ip}/rpc/Switch.GetStatus?id=0'
+        headers = {"content-type": "application/json"}
+        ParsedData = requests.get(url, headers=headers, auth=(self.user, self.password), timeout=10).json()
+        logging.debug(ParsedData)
+        Watts = self.CastToInt(ParsedData['apower'])
+        logging.debug("METER: powermeter ShellyPlus1PM: %s %s",Watts," Watt")
+        return self.CastToInt(Watts)
+
     def GetPowermeterWattsShellyEM(self):
         url = f'http://{self.ip}/status'
         headers = {"content-type": "application/json"}
         ParsedData = requests.get(url, headers=headers, auth=(self.user, self.password), timeout=10).json()
         logging.debug(ParsedData)
         Watts = sum(self.CastToInt(emeter['power']) for emeter in ParsedData['emeters'])
-        logging.debug("METER: powermeter Shelly EM: %s %s",Watts," Watt")
+        logging.debug("METER: powermeter ShellyEM: %s %s",Watts," Watt")
         return self.CastToInt(Watts)
     
     def GetPowermeterWattsShelly3EM(self):
@@ -195,7 +231,15 @@ class meter:
         Watts = self.CastToInt(ParsedData['data'][0]['tuples'][0][1])
         logging.debug("METER: powermeter VZLogger: %s %s",Watts," Watt")
         return self.CastToInt(Watts)
-    
+
+    def GetPowermeterWattsAmisReader(self):
+        url = f'http://{self.ip}/rest'
+        ParsedData = requests.get(url, timeout=10).json()
+        logging.debug(ParsedData)
+        Watts = self.CastToInt(ParsedData['saldo'])
+        logging.debug("METER: powermeter AmisReader: %s %s",Watts," Watt")
+        return self.CastToInt(Watts)
+
     #Use Simple API of IOBroker to get the power value, install if you want to use, default port=8087
     def GetPowermeterWattsIobroker(self):
         url = f'http://{self.ip}:{self.port}/getPlainValue/{self.iobrogerobject}'

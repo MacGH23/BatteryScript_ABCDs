@@ -7,7 +7,7 @@ from time import sleep
 from configupdater import ConfigUpdater
 
 def tmux(command):
-    os.system('tmux %s' % command)
+    os.system('tmux ' + command)
 
 def StartTmuxSession():
     tmux('new-session -d -s BS')
