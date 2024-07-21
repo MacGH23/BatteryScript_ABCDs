@@ -1,7 +1,8 @@
 # ABCDS: *A*utomatic (DIY) *B*attery *C*harge / *D*ischarge *S*cript
 
 Python3 script for fully automatic charge and discharge a DIY battery for photovoltaic systems to provide a "zero feed-in".<br><br>
-**WARNING - USE THIS SCRIPT TOTALLY ON YOUR OWN RISK !!! (needed to add ;-)<br><br>** 
+**WARNING - USE THIS SCRIPT TOTALLY ON YOUR OWN RISK !!! (needed to add ;-)** 
+**Check which device can be used in your country and fullfill all regulatory requirements !<br><br>** 
 The idea of this script is to provide a framework for handling the power stuff, <br> 
 and everyone can add new devices and provide it to the community.<br><br>
 Current tested/running on a Raspberry Pi:
@@ -160,12 +161,18 @@ An integrated webserver at port 9000 is implemented to provide information and s
 `http://[IP_of_Raspi]:9000`<br>
 
 **Installation:<br>**
+Automatic installation:<br>
+`wget -O - https://github.com/MacGH23/BatteryScript_ABCDs/blob/ABCDs_install.sh | sudo bash`<br>
+
+Manual Install with Git and clone the repository:<br>
+`sudo apt install git`<br>
+`git clone https://github.com/MacGH23/BatteryScript_ABCDs.git BatteryScript_ABCDs`<br>
 Some python lib needed. Please install:<br>
 `pip3 install pyserial`<br>
 `pip3 install paho-mqtt`<br>
 `--> if you already have installed paho-mqtt < 2.0 you have to update to 2.x` <br>
-`pip3 install -U paho-mqtt ` <br>
-`pip3 python-can` <br>
+`pip3 install -U paho-mqtt` <br>
+`apt install pip3 python3-can` <br>
 `pip3 install ifcfg`<br>
 `pip3 install minimalmodbus`<br>
 `pip3 install configupdater`<br>
@@ -183,7 +190,7 @@ For the serial communication with Lumentree and BMS the user must be added to di
 `sudo systemctl stop ModemManager`<br>
 `sudo systemctl disable ModemManager`<br>
 
-- Lumentree can not be updated too quickly <br>
+- Lumentree should not be updated too quickly <br>
 Setting recommendation: <br>
 LastDisChargePower_delta = 15 (between 10..20)<br>
 DisChargerPowerCalcCount = 4 (or higher)<br> 
@@ -229,7 +236,7 @@ Add a:<br>
 
 **CAN devices hints:<br>**
 If you see problems during init of CAN device, check / add an entry in<br>
-` sudo nano /etc/host`  <br>
+` sudo nano /etc/hosts`  <br>
 127.0.1.1       [Hostname of your Raspberry] <br>
 
 **Credits:<br>**

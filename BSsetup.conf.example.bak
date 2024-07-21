@@ -249,10 +249,7 @@ MaxChargeWATT              =  480
 #NOTE: For Meanwell specify in Meanwell section in Ampere
 MaxDisChargeWATT           =   570  
 
-#Min Watt what the discharger / Inverter can provide, normally 0; 
-#Lumentree      600 = 27W     --> use 28 to be sure ;-)
-#Lumentree/SUN 1000 = 20-30W  --> use 30 to be sure ;-)
-#Lumentree/SUN 2000 = 70W-80W --> use 80 to be sure ;-)
+#Min Watt what the discharger / Inverter can provide, normally 0; Lumentree 600 = 27W --> use 28 to be sure ;-)
 #NOTE: For Meanwell specify in Meanwell section in Ampere
 MinDisChargeWATT           =    28  
 
@@ -299,8 +296,8 @@ lt_devtype = 0
 # If a lumentree is installed but you want to use another Device or simulator, 
 # the lumentree will start at max power during startup, this will prevent this
 lt_foreceoffonstartup    = 0
-# Max. Efficacy Factor in % of the Lumentree (datasheet), needed for Ah calculation 
-# Check with your setup if this match and adjust if needed
+#Max. Efficacy Factor in % of the Lumentree (datasheet), needed for Ah calculation 
+#Check with your setup if this match and adjust if needed
 lt_efficacy_factor = 90
 
 #Max Temperature for the device (for all the same). If Temp > MaxTemp = Stop
@@ -323,20 +320,6 @@ lt2_maxwatt = 0
 lt3_device  = 
 lt3_address = 1
 lt3_maxwatt = 0
-
-##########################################################################
-# Soyo 1000W/1200W        ################################################
-##########################################################################
-# select the right device and values for soyo device
-soyo_device  = /dev/ttyAMA0
-
-# Power in WATT ! 
-# 1000W = 1000
-soyo_maxwatt = 1000
-
-# Max. Efficacy Factor in % of the Soyo (datasheet), needed for Ah calculation 
-# Check with your setup if this match and adjust if needed
-soyo_efficacy_factor = 90
 
 ##########################################################################
 # Here you specify your main parameter for charging
