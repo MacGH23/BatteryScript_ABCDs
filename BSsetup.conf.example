@@ -74,11 +74,25 @@ WSport = 9000
 WSipadr = 
 
 ### BMS USD ##############################################################
-# Software calculates the SOC form DC voltage from BatteryVoltageSource (see below)
+# For SOC Software can calculate the SOC form DC voltage from BatteryVoltageSource (see below)
+# for all other featrues a BMS should be used !
 # DISABLED  = 0
 # Software  = 1 #not fully implemented 
 # JKBMS     = 2
+# DalyBMS   = 3
 Selected_BMS = 0
+
+#BMS Device
+# e.g.
+# /dev/ttyAMA0
+# /dev/ttyUSB0
+BMS_device = /dev/ttyAMA0
+
+#DalyBMS
+#use sinowealth method or normal
+#0:normal
+#1:sinowealth
+BMS_daly_use_sinowealth = 0
 
 #Discharge until ..., -1 = Don't check BMS SOC Level at all, let BMS/Voltage control the stopping
 #Check if your BMS SOC Value matches the real SOC, otherwise use only Voltages
@@ -89,7 +103,6 @@ BMSminSOC = 0
 #If you don't want to use it, set to 0 !
 #Must be higher as BMSminSOC !
 BMSRestartSOC = 5
-bms_device = /dev/ttyAMA0
 
 #Max Temperature for BMS
 BMS_MaxTempMosFet = 40
@@ -140,8 +153,9 @@ PowerControlmethod = 1
 Selected_Device_Charger = 255
 
 ### USED DISCHARGER ######################################################
-# BIC-2200  = 0
-# Lumentree = 1
+# BIC-2200 			     = 0
+# Lumentree 			 = 1
+# Soyo 1000W/1200W RS485 = 2
 # Simulator = 255
 Selected_Device_DisCharger = 255
 
@@ -245,8 +259,9 @@ MaxChargeWATT              =  480
 #Check for Lumentree what is the real max output at max set. At 24V the output is lower because of limited current
 #Lumentree 600 @ 24V has only 570W max !
 #If you have more than 1 installed, this value must be the total of all installed discharger !
-#NOTE: For Lumentree it is calculated by the values you specify in the Lumentree ltx_maxwatt section !
+#NOTE: For Lumentree it is calculated by the values you specify in the Lumentree lt[x]_maxwatt section !
 #NOTE: For Meanwell specify in Meanwell section in Ampere
+#NOTE: For Soyo specify in Soyo section
 MaxDisChargeWATT           =   570  
 
 #Min Watt what the discharger / Inverter can provide, normally 0; 

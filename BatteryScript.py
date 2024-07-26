@@ -54,6 +54,7 @@
 # macGH 04.06.2024  Version 0.3.1: Errorhandling during powermeter dis/rereconnect
 # macGH 14.06.2024  Version 0.3.2: Added NPB Voltage adaption for smaller than Mincurrent charge, added ZerodeltaChargerWatt
 # macGH 16.07.2024  Version 0.3.3: Added Soyo 1000W/1200W - experimental; improved meterdelay, some small changes
+# macGH 16.07.2024  Version 0.3.4: Added DalyBMS - Should work but not 100%tested
 
 import os
 import sys
@@ -79,9 +80,14 @@ import subprocess
 from Charger.mwcan import *
 from DisCharger.lt232 import *
 from DisCharger.soyo485 import *
-from BMS.jkbms import *
 from Meter.meter import *
 from Charger.constbased import *
+
+#Add BMS path
+padd = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(1, padd + '/BMS')  # the type of path is string
+from jkbms import *
+from daly_bms_lib import *
 
 #LCD import
 from LCD.hd44780_i2c import i2clcd
@@ -470,6 +476,7 @@ class chargerconfig:
 
             self.i_changed_my_config       =  int(updater["Setup"]["i_changed_my_config"].value)
             self.BSstart_UsedConfig        =  int(updater["Setup"]["BSstart_UsedConfig"].value)
+            self.MeterDelaytime            =  int(updater["Setup"]["MeterDelaytime"].value)
             self.ChargerPowerCalcCount     =  int(updater["Setup"]["ChargerPowerCalcCount"].value)
             self.DisChargerPowerCalcCount  =  int(updater["Setup"]["DisChargerPowerCalcCount"].value)
             status.powercalccount = self.ChargerPowerCalcCount
@@ -531,7 +538,6 @@ class chargerconfig:
             self.CBC_pass                  =  updater["Setup"]["CBC_pass"].value
             self.CBC_wattdelta             =  int(updater["Setup"]["CBC_wattdelta"].value)
 
-            self.MeterDelaytime            =  int(updater["Setup"]["MeterDelaytime"].value)
             self.MeterStopOnConnectionLost =  int(updater["Setup"]["MeterStopOnConnectionLost"].value)
             self.GetPowerOption            =  int(updater["Setup"]["GetPowerOption"].value)
             self.PowerControlmethod        =  int(updater["Setup"]["PowerControlmethod"].value)
@@ -581,9 +587,10 @@ class chargerconfig:
             self.mqttpublishWATTCut        =  int(updater["Setup"]["mqttpublishWATTCut"].value)
 
             self.Selected_BMS              =  int(updater["Setup"]["Selected_BMS"].value)
-            self.bms_device                =  updater["Setup"]["bms_device"].value
-            self.BMSminSOC                 =  int(updater["Setup"]["BMSminSOC"].value)
-            self.BMSRestartSOC             =  int(updater["Setup"]["BMSRestartSOC"].value)
+            self.BMS_device                =  updater["Setup"]["BMS_device"].value
+            self.BMS_daly_use_sinowealth   =  updater["Setup"]["BMS_daly_use_sinowealth"].value
+            self.BMS_minSOC                 =  int(updater["Setup"]["BMS_minSOC"].value)
+            self.BMS_RestartSOC             =  int(updater["Setup"]["BMS_RestartSOC"].value)
             self.BMS_MaxTempMosFet         =  int(updater["Setup"]["BMS_MaxTempMosFet"].value)
             self.BMS_MaxTemp1              =  int(updater["Setup"]["BMS_MaxTemp1"].value)
             self.BMS_MaxTemp2              =  int(updater["Setup"]["BMS_MaxTemp2"].value)
@@ -709,9 +716,9 @@ class chargerconfig:
 
             mylogs.info("-- BMS --                   ")
             mylogs.info("Selected_BMS:               " + str(self.Selected_BMS))
-            mylogs.info("bms_device:                 " + str(self.bms_device))
-            mylogs.info("BMSminSOC:                  " + str(self.BMSminSOC))
-            mylogs.info("BMSRestartSOC:              " + str(self.BMSRestartSOC))
+            mylogs.info("BMS_device:                 " + str(self.BMS_device))
+            mylogs.info("BMS_minSOC:                 " + str(self.BMS_minSOC))
+            mylogs.info("BMS_RestartSOC:             " + str(self.BMS_RestartSOC))
             mylogs.info("BMS_MaxTempMosFet:          " + str(self.BMS_MaxTempMosFet))
             mylogs.info("BMS_MaxTemp1:               " + str(self.BMS_MaxTemp1))
             mylogs.info("BMS_MaxTemp2:               " + str(self.BMS_MaxTemp2))
@@ -822,8 +829,12 @@ def on_exit():
             soyo.soyo485_close()
 
         if (jk != None):
-            mylogs.info("CLEAN UP: Shutdown JKBMS")
+            mylogs.info("CLEAN UP: Shutdown JK BMS")
             jk.jkbms_close()
+
+        if (daly != None):
+            mylogs.info("CLEAN UP: Shutdown DALY BMS")
+            daly.dalybms_close()
 
         if (cfg.Selected_LCD == 1):
             printlcd(line1="SCRIPT STOP", line2="REASON UNKNOWN")
@@ -869,8 +880,8 @@ def CheckPatameter():
         cfg.MW_BIC2200_ForceAlwaysOn = 0
         return 0
 
-    if(cfg.BMSRestartSOC < cfg.BMSminSOC):
-        mylogs.error("\n\nBMSRestartSOC needs be be higher or equal than BMSminSOC\n")
+    if(cfg.BMS_RestartSOC < cfg.BMS_minSOC):
+        mylogs.error("\n\nBMS_RestartSOC needs be be higher or equal than BMS_minSOC\n")
         return 1
 
     #looks good continue
@@ -1053,6 +1064,41 @@ def GetBMSData():
 
         return status.BMSSOC
 
+    #JKBMS reading
+    if (cfg.Selected_BMS == 3):
+        try:
+          ST = daly.dalybms_read()
+          mylogs.debug("Cellcount: " + str(daly.cell_count))
+          for i in range(daly.cell_count) :
+              mylogs.debug("BMS: CellVolt" + str(i) + ": " + str(daly.cells[i]/1000))
+
+          mylogs.debug("BMS: Temp_Fet : " + str(daly.temp_fet))
+          mylogs.debug("BMS: Temp_1   : " + str(daly.temp_1))
+          mylogs.debug("BMS: temp_2   : " + str(daly.temp_2))
+          mylogs.debug("BMS: BatVolt  : " + str(daly.voltage/100))
+          mylogs.debug("BMS: Current  : " + str(daly.act_current/100))
+          mylogs.debug("BMS: BMSSOC   : " + str(daly.soc))
+          status.BMSVoltage = daly.voltage
+          status.BMSCurrent = daly.act_current
+          status.BMSSOC     = daly.soc 
+
+          BMSstatus.CellCount      = daly.cell_count
+          BMSstatus.BMSSOC         = daly.soc
+          BMSstatus.BMSCurrent     = daly.act_current
+          BMSstatus.BMSVoltage     = daly.voltage
+          BMSstatus.BMSTemp_Mosfet = daly.temp_fet
+          BMSstatus.BMSTemp1       = daly.temp_1
+          BMSstatus.BMSTemp2       = daly.temp_2
+          for i in range(BMSstatus.CellCount) :                                                                             
+              BMSstatus.BMSCellVoltage[i] = daly.cells[i]                                                                                                    
+
+        except Exception as e:
+            mylogs.error("DALY BMS READ EXEPTION !")
+            mylogs.error(str(e))
+            status.BMSSOC = 0
+
+        return status.BMSSOC
+
     mylogs.error("UNKNOWN BMS USED ! Check Configuration !")
     sys.exit(1)
     return
@@ -1158,13 +1204,13 @@ def StartStopOperationDisCharger(val,force=0):
         status.BatteryFULL = 0
 
     #if the Battery is not totally empty anymore, start Discharging
-    if((status.BatteryEMPTY == 1) and (status.BatteryVoltage >= cfg.RestartDisChargevoltage) and (status.BMSSOC >=cfg.BMSRestartSOC)):
+    if((status.BatteryEMPTY == 1) and (status.BatteryVoltage >= cfg.RestartDisChargevoltage) and (status.BMSSOC >=cfg.BMS_RestartSOC)):
         mylogs.info("StartStopOperationDisCharger: Battery Discharging allowed again. Current Volatge: " + str(status.BatteryVoltage/100) + " (Restart Voltage: " + str(cfg.RestartDisChargevoltage/100) + ")")
         status.BatteryEMPTY = 0
 
     #Battery is empty, stop Discharing and wait for charging
     # Do not discharge any further if SOC or voltage is lower than specified
-    if(((status.BatteryVoltage > 0) and (status.BatteryVoltage <= cfg.StopDischargeVoltage)) or (status.BMSSOC <= cfg.BMSminSOC) ):
+    if(((status.BatteryVoltage > 0) and (status.BatteryVoltage <= cfg.StopDischargeVoltage)) or (status.BMSSOC <= cfg.BMS_minSOC) ):
         status.BatteryEMPTY = 1
         #Set EstBatteryWh to 0, because for this schript the Battery is empty 
         status.EstBatteryWh = 0
@@ -2305,6 +2351,7 @@ LT2         = None
 LT3         = None
 soyo        = None
 jk          = None
+daly        = None
 mqttclient  = None
 
 #################################################################
@@ -2617,15 +2664,25 @@ mylogs.info("DisCharger_efficacy_factor  : " + str(status.DisCharger_efficacy_fa
 # BMS INIT
 if (cfg.Selected_BMS != 0):
     BMSstatus = BMS()
-    mylogs.info("Init BMS")
+    mylogs.info("Init BMS ...")
     if (cfg.Selected_BMS == 2):
         try:
-            jk = jkbms(cfg.bms_device,cfg.loglevel)
+            jk = jkbms(cfg.BMS_device,cfg.loglevel)
             jk.jkbms_open()
         except Exception as e:
             mylogs.error("\n\nJK BMS not found !\n")
             mylogs.error(str(e))
             printlcd("EXEPTION JKBMS",str(e))
+            sys.exit(1)
+
+    if (cfg.Selected_BMS == 3):
+        try:
+            daly = dalybmslib(cfg.BMS_device,cfg.BMS_daly_use_sinowealth, cfg.loglevel)
+            daly.dalybms_open()
+        except Exception as e:
+            mylogs.error("\n\nDALY BMS not found !\n")
+            mylogs.error(str(e))
+            printlcd("EXEPTION DALY BMS",str(e))
             sys.exit(1)
 
     sleep(1) #wait until bus is ready
