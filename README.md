@@ -55,6 +55,7 @@ If you want to change the "default" you have to enable write EEPROM again and ch
 
 **BMS:**
 * JKBMS with original JK RS485 interface adapter
+* DalyBMS with original Daly UART interface adapter (no Bluetooth)
 
 **Power meter information:<br>**
 To adjust everything automatically, you need to get the current power.<br>
@@ -76,7 +77,8 @@ Device / HW | Interface | Recommended
 ---|---|---|
 Meanwell | CAN | [Waveshare RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) or [Fischl USBTin](https://www.fischl.de/usbtin/)<br> ![Waveshare RS485CAN](/pictures/wavesharers485can.jpg "Waveshare RS485CAN")   ![Fischl USBTin](/pictures/usbtin.jpg "Fischl USBTin")
 Lumentree | RS232 | Any simple USB to RS232 adapter<br> ![USB RS232](/pictures/usbrs232.jpg "USB RS232") or ![USB RS232](/pictures/RS232_USB2.jpg "USB RS232") <br> See Lumentree installation hints 
-JKBMS | RS485 | [Waveshare RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) with original JKRS485 adapter<br> ![JKBms RS485](/pictures/jkbms_rs485.JPG "JKBms RS485")
+JKBMS | RS485 | [Waveshare RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) with original JKRS485 adapter<br> ![JKBms RS485](/pictures/jkbms_rs485.jpg "JKBms RS485")
+DALYBMS | UART | Original DALY UART USB adapter<br> ![DALYBms UART RS485](/pictures/dalybms_uart.jpg "JKBms RS485")
 
 
 Meanwell devices using a small 2x7 pin, 2.0 pitch connector from MPE for the CAN interface.<br> Normally a connector with 2 wires are part of the delievery. The connector is a [MPE BLC 14](https://www.reichelt.de/crimp-buchsenleiste-14-pol-mpe-blc-14-p247189.html?CCOUNTRY=445&LANGUAGE=de&nbc=1&&r=1) (partnumber 906-2-014-X-BS0A10) and [crimp pins](https://www.reichelt.de/crimpkontakt-fuer-mpe-blc-einzeln-mpe-cc222-p150922.html?CCOUNTRY=445&LANGUAGE=de&nbc=1&&r=1) (partnumber CC2-22/30-TT-RL)
@@ -243,5 +245,6 @@ If you see problems during init of CAN device, check / add an entry in<br>
 Thanks to:<br>
 https://github.com/stcan/meanwell-can-control for first idea for this script<br>
 https://github.com/reserve85/HoymilesZeroExport where I take the code for the http meter request<br>
-https://github.com/fah/jk-bms for the jkbms script
+https://github.com/fah/jk-bms for the JKBMS interface<br>
+https://github.com/dreadnought/python-daly-bms for Daly BMS interface
 
