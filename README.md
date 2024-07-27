@@ -98,9 +98,11 @@ Change the already implemented ones in the charger.conf, or add a new in the scr
 * mqttpublishWATT : send the status of charger / discharger <br>(positive = discharger, negative = charger)<br>
 * mqttpublishSOC  = SOC status of BMS 0..100 (if used)
 
-Usage:<br>
+Usage / Installation:<br>
 All settings can be configured in BSsetup.conf<br>
 All the options are explained or self explaining in detail in the conf file. <br>
+For all devices exists a testprogram in the devices folder (e.g. lt232test for Lumentree) <br>
+Here you can test all devcies seperatly and get the right "/dev/..." and id needed IDs for the access, before running the BatteryScript<br>
 
 Change to executeable by chmod 755 BatteryScript.py<br>
 Change to executeable by chmod 755 BSstart.py<br>
