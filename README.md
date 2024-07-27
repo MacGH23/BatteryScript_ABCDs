@@ -209,7 +209,7 @@ Or remove PIN9 from the RS232 adapter<br>
 Or use a RS232 port protector (1:1) and remove PIN9 <br>
 ![RS232_pp](/pictures/RS232_portprotect.jpg "RS232pp")<br>
 
-**Meanwell installation hints:<br>**
+**Meanwell installation hints (you take the risk !!):<br>**
 - BIC-2200 (need to be installed by a electrically qualified person):<br>
 Normally a ON Jumperwire is installed in the device.<br>
 Before setup everything (including AC/DC cables) remove this cable (prevent to start before configured).<br>
@@ -230,6 +230,15 @@ Now connect the DC wires to the battery during it is OFF.<br>
 Run the script (after configuration of cource).<br>
 <br>
 
+**DALY BMS hints:<br>**
+DALY BMS needs quite long to answer, use min. 2 seconds for meter update<br>
+
+
+**CAN devices hints:<br>**
+If you see problems during init of CAN device, check / add an entry in<br>
+` sudo nano /etc/hosts`  <br>
+127.0.1.1       [Hostname of your Raspberry] <br>
+
 **Add new devices:<br>**
 You have to provide the interface to the device. If possible add a class in a subfolder for easier handling:<br>
 Add a:<br>
@@ -237,11 +246,6 @@ Add a:<br>
 * Add the devices in the StartStop[Dis]Charger functions
 * For BMS devices see the BMS sections for it
 * Add the initialisation and shutdown code in "main" and "onexit"<br><br>
-
-**CAN devices hints:<br>**
-If you see problems during init of CAN device, check / add an entry in<br>
-` sudo nano /etc/hosts`  <br>
-127.0.1.1       [Hostname of your Raspberry] <br>
 
 **Credits:<br>**
 Thanks to:<br>
