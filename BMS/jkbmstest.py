@@ -69,19 +69,20 @@ jk = jkbms(DEVPATH,LOGLEVEL)
 jk.jkbms_open()
 sleep(0.5)
 ST = jk.jkbms_read();
+print(ST)
 
 
 i = 0
-print("Cellcount: " + str(jk.cell_count))                                                                                                    
-for i in range(jk.cell_count) :                                                                             
-    print("CellVolt" + str(i) + ": " + str(jk.cells[i]/1000))                                                                                                    
+print("Cellcount: " + str(jk.cell_count))
+for i in range(jk.cell_count):
+    print("CellVolt" + str(i) + ": " + str(jk.cells[i]/1000))                                                                                          
 
-print("Temp_Fet : " + str(jk.temp_fet))                                                                                                    
-print("Temp_1   : " + str(jk.temp_1))                                                                                                    
-print("temp_2   : " + str(jk.temp_2))                                                                                                    
-print("BatVolt  : " + str(jk.voltage/100))                                                                                                    
-print("Current  : " + str(jk.act_current/100))                                                                                                    
-print("SOC      : " + str(jk.soc))                                                                                                    
-print("WATT     : " + str(int((jk.voltage * jk.act_current) / 10000 )))                                                                                                    
+print("Temp_Fet : " + str(jk.temp_fet))
+print("Temp_1   : " + str(jk.temp_1))
+print("temp_2   : " + str(jk.temp_2))
+print("BatVolt  : " + str(jk.voltage/100))
+print("Current  : " + str(jk.act_current/100))
+print("SOC      : " + str(jk.soc))
+print("WATT     : " + str(int((jk.voltage * jk.act_current) / 10000 )))
          
 sys.exit(0)

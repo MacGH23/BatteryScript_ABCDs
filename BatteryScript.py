@@ -54,7 +54,8 @@
 # macGH 04.06.2024  Version 0.3.1: Errorhandling during powermeter dis/rereconnect
 # macGH 14.06.2024  Version 0.3.2: Added NPB Voltage adaption for smaller than Mincurrent charge, added ZerodeltaChargerWatt
 # macGH 16.07.2024  Version 0.3.3: Added Soyo 1000W/1200W - experimental; improved meterdelay, some small changes
-# macGH 16.07.2024  Version 0.3.4: Added DalyBMS - Should work but not 100%tested
+# macGH 26.07.2024  Version 0.3.4: Added DalyBMS - Should work but not 100%tested
+# macGH 27.07.2024  Version 0.3.5: Update BMS handling
 
 import os
 import sys
@@ -76,21 +77,22 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from io import BytesIO
 import subprocess
 
-#BS classes
+#Device classes
 from Charger.mwcan import *
 from DisCharger.lt232 import *
 from DisCharger.soyo485 import *
 from Meter.meter import *
 from Charger.constbased import *
 
-#Add BMS path
+#LCD import
+from LCD.hd44780_i2c import i2clcd
+
+#Add BMS path, needed for DALYBMS
 padd = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(1, padd + '/BMS')  # the type of path is string
 from jkbms import *
 from daly_bms_lib import *
 
-#LCD import
-from LCD.hd44780_i2c import i2clcd
 
 #######################################################################
 # WEBSERVER CLASS #####################################################
@@ -1029,75 +1031,55 @@ def GetBMSData():
         status.BMSSOC = SocVal
         return status.BMSSOC
 
-    #JKBMS reading
-    if (cfg.Selected_BMS == 2):
-        try:
-          ST = jk.jkbms_read()
-          mylogs.debug("Cellcount: " + str(jk.cell_count))
-          for i in range(jk.cell_count) :
-              mylogs.debug("BMS: CellVolt" + str(i) + ": " + str(jk.cells[i]/1000))
+    try:
+        #Read BMS, ST return need to be the same for all BMS devices !
+        #JKBMS read
+        if (cfg.Selected_BMS == 2):
+            ST = jk.jkbms_read()
 
-          mylogs.debug("BMS: Temp_Fet : " + str(jk.temp_fet))
-          mylogs.debug("BMS: Temp_1   : " + str(jk.temp_1))
-          mylogs.debug("BMS: temp_2   : " + str(jk.temp_2))
-          mylogs.debug("BMS: BatVolt  : " + str(jk.voltage/100))
-          mylogs.debug("BMS: Current  : " + str(jk.act_current/100))
-          mylogs.debug("BMS: BMSSOC   : " + str(jk.soc))
-          status.BMSVoltage = jk.voltage
-          status.BMSCurrent = jk.act_current
-          status.BMSSOC     = jk.soc 
+        #DALYBMS read
+        if (cfg.Selected_BMS == 3):
+            ST = daly.dalybms_read()
 
-          BMSstatus.CellCount      = jk.cell_count
-          BMSstatus.BMSSOC         = jk.soc
-          BMSstatus.BMSCurrent     = jk.act_current
-          BMSstatus.BMSVoltage     = jk.voltage
-          BMSstatus.BMSTemp_Mosfet = jk.temp_fet
-          BMSstatus.BMSTemp1       = jk.temp_1
-          BMSstatus.BMSTemp2       = jk.temp_2
-          for i in range(BMSstatus.CellCount) :                                                                             
-              BMSstatus.BMSCellVoltage[i] = jk.cells[i]                                                                                                    
+    except Exception as e:
+        mylogs.error("BMS READ EXEPTION !")
+        mylogs.error(str(e))
+        status.BMSSOC = 0
 
-        except Exception as e:
-            mylogs.error("JKBMS READ EXEPTION !")
-            mylogs.error(str(e))
-            status.BMSSOC = 0
+    try:
+        BMSstatus.CellCount      = ST[0]
+        for i in range(ST[0]) :                                                                             
+            BMSstatus.BMSCellVoltage[i] = ST[i+1]                                                                                                    
 
-        return status.BMSSOC
+        i=ST[0]+1 #first is the cellscount and cells
+        BMSstatus.BMSTemp_Mosfet = ST[i]
+        BMSstatus.BMSTemp1       = ST[i+1]
+        BMSstatus.BMSTemp2       = ST[i+2]
+        BMSstatus.BMSVoltage     = ST[i+3]
+        BMSstatus.BMSCurrent     = ST[i+4]
+        BMSstatus.BMSSOC         = ST[i+5]
 
-    #JKBMS reading
-    if (cfg.Selected_BMS == 3):
-        try:
-          ST = daly.dalybms_read()
-          mylogs.debug("Cellcount: " + str(daly.cell_count))
-          for i in range(daly.cell_count) :
-              mylogs.debug("BMS: CellVolt" + str(i) + ": " + str(daly.cells[i]/1000))
+        status.BMSVoltage = BMSstatus.BMSVoltage
+        status.BMSCurrent = BMSstatus.BMSCurrent
+        status.BMSSOC     = BMSstatus.BMSSOC 
 
-          mylogs.debug("BMS: Temp_Fet : " + str(daly.temp_fet))
-          mylogs.debug("BMS: Temp_1   : " + str(daly.temp_1))
-          mylogs.debug("BMS: temp_2   : " + str(daly.temp_2))
-          mylogs.debug("BMS: BatVolt  : " + str(daly.voltage/100))
-          mylogs.debug("BMS: Current  : " + str(daly.act_current/100))
-          mylogs.debug("BMS: BMSSOC   : " + str(daly.soc))
-          status.BMSVoltage = daly.voltage
-          status.BMSCurrent = daly.act_current
-          status.BMSSOC     = daly.soc 
-
-          BMSstatus.CellCount      = daly.cell_count
-          BMSstatus.BMSSOC         = daly.soc
-          BMSstatus.BMSCurrent     = daly.act_current
-          BMSstatus.BMSVoltage     = daly.voltage
-          BMSstatus.BMSTemp_Mosfet = daly.temp_fet
-          BMSstatus.BMSTemp1       = daly.temp_1
-          BMSstatus.BMSTemp2       = daly.temp_2
-          for i in range(BMSstatus.CellCount) :                                                                             
-              BMSstatus.BMSCellVoltage[i] = daly.cells[i]                                                                                                    
-
-        except Exception as e:
-            mylogs.error("DALY BMS READ EXEPTION !")
-            mylogs.error(str(e))
-            status.BMSSOC = 0
+        mylogs.debug("Cellcount: " + str(BMSstatus.CellCount))
+        for i in range(BMSstatus.CellCount) :
+            mylogs.debug("BMS: CellVolt" + str(i) + ": " + str(BMSstatus.BMSCellVoltage[i]/1000))
+        mylogs.debug("BMS: Temp_Fet : " + str(BMSstatus.BMSTemp_Mosfet))
+        mylogs.debug("BMS: Temp_1   : " + str(BMSstatus.BMSTemp1))
+        mylogs.debug("BMS: temp_2   : " + str(BMSstatus.BMSTemp2))
+        mylogs.debug("BMS: BatVolt  : " + str(BMSstatus.BMSVoltage/100))
+        mylogs.debug("BMS: Current  : " + str(BMSstatus.BMSCurrent/100))
+        mylogs.debug("BMS: BMSSOC   : " + str(BMSstatus.BMSSOC))
 
         return status.BMSSOC
+
+    except Exception as e:
+        mylogs.error("BMS DATA EXEPTION !")
+        mylogs.error(str(e))
+        status.BMSSOC = 0
+
 
     mylogs.error("UNKNOWN BMS USED ! Check Configuration !")
     sys.exit(1)
