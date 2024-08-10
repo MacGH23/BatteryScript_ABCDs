@@ -238,6 +238,8 @@ DALY BMS needs quite long to answer, use min. 2 seconds for meter update<br>
 If you see problems during init of CAN device, check / add an entry in<br>
 ` sudo nano /etc/hosts`  <br>
 127.0.1.1       [Hostname of your Raspberry] <br>
+- Waveshare CAN RS485 HAT<br>
+For installation see [Waveshare Wiki](https://www.waveshare.com/wiki/RS485_CAN_HAT)
 
 **Add new devices:<br>**
 You have to provide the interface to the device. If possible add a class in a subfolder for easier handling:<br>

@@ -56,6 +56,7 @@
 # macGH 16.07.2024  Version 0.3.3: Added Soyo 1000W/1200W - experimental; improved meterdelay, some small changes
 # macGH 26.07.2024  Version 0.3.4: Added DalyBMS - Should work but not 100%tested
 # macGH 27.07.2024  Version 0.3.5: Update BMS handling
+# macGH 09.08.2024  Version 0.3.5: Update Web Server
 
 import os
 import sys
@@ -108,7 +109,7 @@ class WS(BaseHTTPRequestHandler):
 
         def _gettableentry(self, parameter,value):
             Button = 'n.a.'
-            if((parameter=='ChargerEnabled') or (parameter=='DisChargerEnabled') or (parameter=='WebAutoRefresh')):
+            if((parameter=='ChargerEnabled') or (parameter=='DisChargerEnabled') or (parameter=='WebAutoRefresh') or (parameter=='MW_NBPVoltageAdjust') or (parameter=='ShowRuntime')):
                 Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Toggle ON/OFF</button></form>'
 
             if((parameter=='EstBatteryWh')):
@@ -199,6 +200,7 @@ class WS(BaseHTTPRequestHandler):
         def _systemhtml(self, message):
             content = self._gettableentry('CPU usage in %',psutil.cpu_percent()) +\
                       self._gettableentry('RAM usage in %',psutil.virtual_memory().percent) +\
+                      self._gettableentry('CPU Temperature &deg;C',int(psutil.sensors_temperatures()['cpu_thermal'][0].current)) +\
                       self._gettableentry('Reboot',status.WebRebootSDcounter)   +\
                       self._gettableentry('Shutdown',status.WebRebootSDcounter) +\
                       self._gettableentry('RestartMethod0',status.WebRebootSDcounter) +\
@@ -309,6 +311,18 @@ class WS(BaseHTTPRequestHandler):
                     todo = 'WebAutoRefresh Toggle done'
                     status.WebAutoRefresh = 1 - status.WebAutoRefresh
                     self.wfile.write(self._statushtml(todo))
+
+                if(variable == 'MW_NBPVoltageAdjust'):
+                    mylogs.info("MW_NBPVoltageAdjust button pressed")
+                    todo = 'MW_NBPVoltageAdjust Toggle done'
+                    cfg.MW_NBPVoltageAdjust = 1 - cfg.MW_NBPVoltageAdjust
+                    self.wfile.write(self._confightml(todo))
+
+                if(variable == 'ShowRuntime'):
+                    mylogs.info("ShowRuntime button pressed")
+                    todo = 'ShowRuntime Toggle done'
+                    cfg.ShowRuntime = 1 - cfg.ShowRuntime
+                    self.wfile.write(self._confightml(todo))
 
                 if(variable == 'EstBatteryWh'):
                     mylogs.info("EstBatteryWh reset button pressed")
@@ -478,6 +492,7 @@ class chargerconfig:
 
             self.i_changed_my_config       =  int(updater["Setup"]["i_changed_my_config"].value)
             self.BSstart_UsedConfig        =  int(updater["Setup"]["BSstart_UsedConfig"].value)
+            self.ShowRuntime               =  int(updater["Setup"]["ShowRuntime"].value)
             self.MeterDelaytime            =  int(updater["Setup"]["MeterDelaytime"].value)
             self.ChargerPowerCalcCount     =  int(updater["Setup"]["ChargerPowerCalcCount"].value)
             self.DisChargerPowerCalcCount  =  int(updater["Setup"]["DisChargerPowerCalcCount"].value)
@@ -2077,7 +2092,9 @@ def process_power(power):
         diffmeter = (now - status.LastStartRunTime).total_seconds()
         if(diffrun > status.MaxRunTime):
            status.MaxRunTime = diffrun
-        mylogs.info("-> Last Run Duration: " + str(diffrun) + ' - MaxRunTime: ' + str(status.MaxRunTime) + " - Lastmetertime: " + str(diffmeter))
+
+        if(cfg.ShowRuntime == 1):
+            mylogs.info("-> Last Run Duration: " + str(diffrun) + ' - MaxRunTime: ' + str(status.MaxRunTime) + " - Lastmetertime: " + str(diffmeter))
 
         if(diffmeter < (cfg.MeterDelaytime-0.1)): #allow 100ms diffrence
             mylogs.warning("process_power: Too fast power meter reading ! Ignore value: " + str(diffmeter))
@@ -2266,6 +2283,27 @@ signal.signal(signal.SIGINT,  handle_exit)  # 2 Interrupt from keyboard CRTL-C m
 signal.signal(signal.SIGQUIT, handle_exit)  # 3
 signal.signal(signal.SIGTERM, handle_exit)  #15
 
+print("")
+print("#####################################################")
+print("      _       ______      ______  ______           ")
+print("     / \     |_   _ \   .' ___  ||_   _ `.         ")
+print("    / _ \      | |_) | / .'   \_|  | | `. \ .--.   ")
+print("   / ___ \     |  __'. | |         | |  | |( (`\]  ")
+print(" _/ /   \ \_  _| |__) |\ `.___.'\ _| |_.' / `'.'.  ")
+print("|____| |____||_______/  `.____ .'|______.' [\__) ) ")
+print("#####################################################")
+print("")
+print("######################################################")
+print("# THERE IS NO GURANTEE FOR AN ERROR FREE EXECUTION   #")
+print("# YOU TAKE THE TOTAL RISK IF YOU USE THIS SCRIPT !!! #")
+print("# ONLY FOR USE WITH LIFEPO4 CELLS !!!                #")
+print("# BATTERIES CAN BE DANGEROUS !!!                     #")
+print("# BE SURE YOU KNOW WHAT YOU ARE DOING !!             #")
+print("# THE AUTHOR(S) IS NOT LIABLE FOR ANY DAMAGE !!      #")
+print("# YOU HAVE BEEN WARNED !                             #")
+print("######################################################")
+print("")
+
 #Ckeck if we should wait x seconds before start (Network interface up)
 if len(sys.argv) == 2:
     try:
@@ -2290,33 +2328,13 @@ logging.Logger.verbose = verbose
 #Create a new logger mylogs
 mylogs  = logging.getLogger()
 
-print("")
-print("#####################################################")
-print("      _       ______      ______  ______           ")
-print("     / \     |_   _ \   .' ___  ||_   _ `.         ")
-print("    / _ \      | |_) | / .'   \_|  | | `. \ .--.   ")
-print("   / ___ \     |  __'. | |         | |  | |( (`\]  ")
-print(" _/ /   \ \_  _| |__) |\ `.___.'\ _| |_.' / `'.'.  ")
-print("|____| |____||_______/  `.____ .'|______.' [\__) ) ")
-print("#####################################################")
-print("")
-print("######################################################")
-print("# THERE IS NO GURANTEE FOR AN ERROR FREE EXECUTION   #")
-print("# YOU TAKE THE TOTAL RISK IF YOU USE THIS SCRIPT !!! #")
-print("# ONLY FOR USE WITH LIFEPO4 CELLS !!!                #")
-print("# BATTERIES CAN BE DANGEROUS !!!                     #")
-print("# BE SURE YOU KNOW WHAT YOU ARE DOING !!             #")
-print("# THE AUTHOR(S) IS NOT LIABLE FOR ANY DAMAGE !!      #")
-print("# YOU HAVE BEEN WARNED !                             #")
-print("######################################################")
-print("")
-
 #Read conf file
 spath   = os.path.dirname(os.path.realpath(sys.argv[0]))
 status.configfile = spath + "/BSsetup.conf"
 cfg     = chargerconfig()
 
 #put it into status class for easier status info for webserver
+#needs to be here because it will overwrite the value with 0 during exit
 status.EstBatteryWh = cfg.EstBatteryWh
 
 if (cfg.i_changed_my_config == 0):
@@ -2736,8 +2754,9 @@ if (cfg.GetPowerOption==0) or (cfg.mqttpublish==1):
         if (cfg.GetPowerOption==0):
             mqttclient.on_message    = mqtt_on_message
 
+        mqttclient.connect_timeout = 600 #Wait in case of restart / blackout until mqtt server is ready
         mqttclient.username_pw_set(cfg.mqttuser, cfg.mqttpass)
-        mqttclient.connect(cfg.mqttserver, cfg.mqttport, 120)
+        mqttclient.connect(cfg.mqttserver, port=cfg.mqttport, keepalive=60)
         mqttclient.loop_start()
     except Exception as e:
         mylogs.error("MQTT EXCEPTION !")

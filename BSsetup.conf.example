@@ -41,6 +41,9 @@ logappendfile             = 0
 #Should be used when run as a service after fully tested with your environment and loglevel set to warning
 logtosyslog               = 0
 
+#For debug or information you can show the runtime for each meter update
+ShowRuntime               = 1
+
 ##########################################################################
 # LCD setup 
 # 0 = Disabled
@@ -96,13 +99,13 @@ BMS_daly_use_sinowealth = 0
 
 #Discharge until ..., -1 = Don't check BMS SOC Level at all, let BMS/Voltage control the stopping
 #Check if your BMS SOC Value matches the real SOC, otherwise use only Voltages
-BMSminSOC = 0
+BMS_minSOC = 0
 
-#When the charger stopped charging because of BMSminSOC, 
+#When the charger stopped charging because of BMS_minSOC, 
 #this value defines when discharging is allowed again
 #If you don't want to use it, set to 0 !
 #Must be higher as BMSminSOC !
-BMSRestartSOC = 5
+BMS_RestartSOC = 5
 
 #Max Temperature for BMS
 BMS_MaxTempMosFet = 40
