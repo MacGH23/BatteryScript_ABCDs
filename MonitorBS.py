@@ -18,7 +18,7 @@ def is_running(script):
 
 
 def CheckScript():
-    if not is_running("ChargeScript.py"):
+    if not is_running("BatteryScript.py"):
        print ("Is not Running")
        
 schedule.every(2).seconds.do(CheckScript)                      # Start every 2s
@@ -26,4 +26,5 @@ schedule.every(2).seconds.do(CheckScript)                      # Start every 2s
 while True:
     schedule.run_pending()
     sleep(1)
+
 
