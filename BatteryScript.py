@@ -2555,7 +2555,10 @@ if (cfg.Selected_Device_Charger <=1):
                 mylogs.warning("MEANWELL EEPROM WRITE IS STILL ENABLED. WITH A FIRMWARE > April / 2024 THIS CAN BE DISABLED")
             else:
                 status.MW_EEPromOff = 1    
-                mylogs.warning("MEANWELL SYSTEM CONFIG BIT - EEPROM WRITE IS DISABLED")
+                mylogs.warning("MEANWELL SYSTEM CONFIG BIT - EEPROM WRITE NOW IS DISABLED")
+                mylogs.warning("YOU HAVE TO POWER CYCLE OFF/ON THE MEANWELL DEVICE NOW BY YOURSELF !!")
+                MW_EEPROM_Counter_INC(0)
+                sys.exit(1)
     else:
         status.MW_EEPromOff = 1    
         mylogs.info("MEANWELL SYSTEM CONFIG - EEPROM WRITE IS DISABLED")
