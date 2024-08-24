@@ -57,6 +57,9 @@
 # macGH 26.07.2024  Version 0.3.4: Added DalyBMS - Should work but not 100%tested
 # macGH 27.07.2024  Version 0.3.5: Update BMS handling
 # macGH 09.08.2024  Version 0.3.5: Update Web Server
+# macGH 24.08.2024  Version 0.4.0: Added UNIBMS based on https://github.com/mr-manuel/venus-os_dbus-serialbattery -> much more BMS supported now
+#                                  Added power swap if meter send the value in wrong format
+#                                  Addad customizable mqtt actions for web interface
 
 import os
 import sys
@@ -93,6 +96,8 @@ padd = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(1, padd + '/BMS')  # the type of path is string
 from jkbms import *
 from daly_bms_lib import *
+sys.path.insert(1, padd + '/UNIBMS')  # the type of path is string
+from uni_bms import *
 
 
 #######################################################################
@@ -111,6 +116,9 @@ class WS(BaseHTTPRequestHandler):
             Button = 'n.a.'
             if((parameter=='ChargerEnabled') or (parameter=='DisChargerEnabled') or (parameter=='WebAutoRefresh') or (parameter=='MW_NBPVoltageAdjust') or (parameter=='ShowRuntime')):
                 Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Toggle ON/OFF</button></form>'
+
+            if('MQTT_' in parameter):
+                Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Execute Action</button></form>'
 
             if((parameter=='EstBatteryWh')):
                 Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Reset to 0</button></form>'
@@ -145,10 +153,11 @@ class WS(BaseHTTPRequestHandler):
                       '</head>\n' + \
                       '<body>\n' + \
                       '<h1>Welcome to ABCDs WebServer Interface</h1>\n' + \
-                      '<p style="font-size:1.4vw;">Links: &nbsp;<a href="/">Show global Status</a>&nbsp;&nbsp;&nbsp;' + \
-                      '<a href="/config">Show Config</a>&nbsp;&nbsp;&nbsp;' + \
-                      '<a href="/bms">Show BMS status</a>&nbsp;&nbsp;&nbsp;' + \
-                      '<a href="/system">Show System Status</a>&nbsp;&nbsp;&nbsp;</p>' + \
+                      '<p style="font-size:1.4vw;"><a href="/">Global Status</a>&nbsp;&nbsp;&nbsp;' + \
+                      '<a href="/config">Config</a>&nbsp;&nbsp;&nbsp;' + \
+                      '<a href="/bms">BMS status</a>&nbsp;&nbsp;&nbsp;' + \
+                      '<a href="/system">System Status</a>&nbsp;&nbsp;&nbsp;' + \
+                      '<a href="/mqtt">MQTT Actions</a>&nbsp;&nbsp;&nbsp;</p>' + \
                       '<br><br>\n<b>' + \
                       message + \
                       '</b></h1><br>\n'
@@ -218,6 +227,22 @@ class WS(BaseHTTPRequestHandler):
 
             return content.encode("utf8")  # NOTE: must return a bytes object!
 
+        def _mqtthtml(self, message):
+            content = self._gettableentry('MQTT_' + cfg.mqttaction1name + '_1',0) +\
+                      self._gettableentry('MQTT_' + cfg.mqttaction2name + '_2',0) +\
+                      self._gettableentry('MQTT_' + cfg.mqttaction3name + '_3',0) +\
+                      self._gettableentry('MQTT_' + cfg.mqttaction4name + '_4',0)
+
+            content = self._beginhtml(message,-1,'/system') + \
+                      '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;font-size:1.1vw;">'+ \
+                      '<tbody>'+ \
+                      content + \
+                      '</tbody>' + \
+                      '</table>'+ \
+                      self._endhtml()
+
+            return content.encode("utf8")  # NOTE: must return a bytes object!
+
         def _statushtml(self, message):
             content = self._beginhtml(str(message),30,'/') + \
                       '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;font-size:1.1vw;">\n'+ \
@@ -264,6 +289,8 @@ class WS(BaseHTTPRequestHandler):
                 self.wfile.write(self._bmshtml("Read BMS status"))
             if(self.path == '/system'):
                 self.wfile.write(self._systemhtml("Read System status"))
+            if(self.path == '/mqtt'):
+                self.wfile.write(self._mqtthtml("MQTT Action"))
             if('/DIRECTRESTART' in self.path):
                 n = self.path[-1]
                 p = os.path.dirname(__file__)
@@ -363,6 +390,12 @@ class WS(BaseHTTPRequestHandler):
                         sys.exit(1)
                     self.wfile.write(self._systemhtml(todo))
 
+                if('MQTT_' in variable):
+                    n = variable[-1]
+                    todo = 'MQTT action NR: >' + n + '< executed'
+                    mqttactionpublish(n)
+                    self.wfile.write(self._mqtthtml(todo))
+
             return
 
         #Get the log handler to prevent to print all to the screen
@@ -389,6 +422,8 @@ class BMS:
         self.BMSTemp_Mosfet             = 0
         self.BMSTemp1                   = 0
         self.BMSTemp2                   = 0
+        self.BMSTemp3                   = 0
+        self.BMSTemp4                   = 0
         self.CellCount                  = 0
         self.BMSCellVoltage             = []
         for x in range(24):
@@ -492,8 +527,12 @@ class chargerconfig:
 
             self.i_changed_my_config       =  int(updater["Setup"]["i_changed_my_config"].value)
             self.BSstart_UsedConfig        =  int(updater["Setup"]["BSstart_UsedConfig"].value)
+            self.BSstart_UseServerPing     =  int(updater["Setup"]["BSstart_UseServerPing"].value)
+            
             self.ShowRuntime               =  int(updater["Setup"]["ShowRuntime"].value)
             self.MeterDelaytime            =  int(updater["Setup"]["MeterDelaytime"].value)
+            self.MeterSwapValue            =  int(updater["Setup"]["MeterSwapValue"].value)
+
             self.ChargerPowerCalcCount     =  int(updater["Setup"]["ChargerPowerCalcCount"].value)
             self.DisChargerPowerCalcCount  =  int(updater["Setup"]["DisChargerPowerCalcCount"].value)
             status.powercalccount = self.ChargerPowerCalcCount
@@ -603,6 +642,19 @@ class chargerconfig:
             self.mqttpublishBatVolt        =  updater["Setup"]["mqttpublishBatVolt"].value
             self.mqttpublishWATTCut        =  int(updater["Setup"]["mqttpublishWATTCut"].value)
 
+            self.mqttaction1topic          =  updater["Setup"]["mqttaction1topic"].value
+            self.mqttaction2topic          =  updater["Setup"]["mqttaction2topic"].value
+            self.mqttaction3topic          =  updater["Setup"]["mqttaction3topic"].value
+            self.mqttaction4topic          =  updater["Setup"]["mqttaction4topic"].value
+            self.mqttaction1payload        =  updater["Setup"]["mqttaction1payload"].value
+            self.mqttaction2payload        =  updater["Setup"]["mqttaction2payload"].value
+            self.mqttaction3payload        =  updater["Setup"]["mqttaction3payload"].value
+            self.mqttaction4payload        =  updater["Setup"]["mqttaction4payload"].value
+            self.mqttaction1name           =  updater["Setup"]["mqttaction1name"].value
+            self.mqttaction2name           =  updater["Setup"]["mqttaction2name"].value
+            self.mqttaction3name           =  updater["Setup"]["mqttaction3name"].value
+            self.mqttaction4name           =  updater["Setup"]["mqttaction4name"].value
+
             self.Selected_BMS              =  int(updater["Setup"]["Selected_BMS"].value)
             self.BMS_device                =  updater["Setup"]["BMS_device"].value
             self.BMS_daly_use_sinowealth   =  updater["Setup"]["BMS_daly_use_sinowealth"].value
@@ -671,6 +723,8 @@ class chargerconfig:
             mylogs.info("-- PowerMeter --            ")
             mylogs.info("GetPowerOption:             " + str(self.GetPowerOption))
             mylogs.info("MeterDelaytime:             " + str(self.MeterDelaytime))
+            mylogs.info("MeterSwapValue:             " + str(self.MeterSwapValue))
+
             mylogs.info("MeterUpdateChargeCounter:   " + str(self.MeterUpdateChargeCounter))
             mylogs.info("MeterUpdateDisChargeCounter:" + str(self.MeterUpdateDisChargeCounter))
             mylogs.info("MeterStopOnConnectionLost:  " + str(self.MeterStopOnConnectionLost))
@@ -1012,6 +1066,19 @@ def mqttpublish(cleanup=0):
             mylogs.error(str(e))
     return     
 
+def mqttactionpublish(nr, cleanup=0):
+    if (cfg.mqttpublish == 0): return
+    mylogs.info("MQTT Action publish: " + str(nr))
+    try:
+        if(nr == "1"): mqttclient.publish(cfg.mqttaction1topic, payload=cfg.mqttaction1payload, qos=0, retain=True)
+        if(nr == "2"): mqttclient.publish(cfg.mqttaction2topic, payload=cfg.mqttaction2payload, qos=0, retain=True)
+        if(nr == "3"): mqttclient.publish(cfg.mqttaction3topic, payload=cfg.mqttaction3payload, qos=0, retain=True)
+        if(nr == "4"): mqttclient.publish(cfg.mqttaction4topic, payload=cfg.mqttaction4payload, qos=0, retain=True)
+    except Exception as e:
+            mylogs.error("MQTT PUBLISH EXEPTION !")
+            mylogs.error(str(e))
+    return     
+
 #####################################################################
 # BMS Section
 #####################################################################
@@ -1056,6 +1123,11 @@ def GetBMSData():
         if (cfg.Selected_BMS == 3):
             ST = daly.dalybms_read()
 
+        #UNIBMS read
+        if (cfg.Selected_BMS == 100):
+            ST = UBMS.bms_read();
+
+
     except Exception as e:
         mylogs.error("BMS READ EXEPTION !")
         mylogs.error(str(e))
@@ -1070,9 +1142,11 @@ def GetBMSData():
         BMSstatus.BMSTemp_Mosfet = ST[i]
         BMSstatus.BMSTemp1       = ST[i+1]
         BMSstatus.BMSTemp2       = ST[i+2]
-        BMSstatus.BMSVoltage     = ST[i+3]
-        BMSstatus.BMSCurrent     = ST[i+4]
-        BMSstatus.BMSSOC         = ST[i+5]
+        BMSstatus.BMSTemp3       = ST[i+3]
+        BMSstatus.BMSTemp4       = ST[i+4]
+        BMSstatus.BMSVoltage     = ST[i+5]
+        BMSstatus.BMSCurrent     = ST[i+6]
+        BMSstatus.BMSSOC         = ST[i+7]
 
         status.BMSVoltage = BMSstatus.BMSVoltage
         status.BMSCurrent = BMSstatus.BMSCurrent
@@ -2042,7 +2116,7 @@ def getoutputpower(val):
     mylogs.debug("getoutputpower entry ...")
 
     try:
-        if((datetime.datetime.now() - status.CheckDeviceTime).total_seconds() > 30): #check every 30 seconds 
+        if((datetime.datetime.now() - status.CheckDeviceTime).total_seconds() > 15): #check every 30 seconds 
             mylogs.debug("getoutputpower: CHECK DEVICES")
             status.WebRebootSDcounter = 0 #reset rebootcounter for webinterface
             status.CheckDeviceTime = datetime.datetime.now()
@@ -2085,6 +2159,11 @@ def getoutputpower(val):
 def process_power(power):
     try:
         mylogs.debug("process_power entry: " + str(power))
+
+        if(cfg.MeterSwapValue == 1):
+            #Value is in the wrong +/- order, swap it
+            power = power * (-1)
+            mylogs.debug("process_power swap: " + str(power))
 
         now  = datetime.datetime.now()
         diff = (now - status.LastEstWhTime).total_seconds()
@@ -2304,16 +2383,6 @@ print("# YOU HAVE BEEN WARNED !                             #")
 print("######################################################")
 print("")
 
-#Ckeck if we should wait x seconds before start (Network interface up)
-if len(sys.argv) == 2:
-    try:
-        mylogs.info("Wait some time ... \n")
-        s = int(sys.argv[1])
-        sleep(s)
-    except Exception as e:
-        mylogs.error("ERROR IN SLEEP PARAMETER !\n")
-        mylogs.error(str(e))
-
 #################################################################
 #Init global variables
 status = Devicestatus();
@@ -2325,8 +2394,19 @@ status = Devicestatus();
 logging.VERBOSE = 15
 logging.addLevelName(logging.VERBOSE, 'VERBOSE')
 logging.Logger.verbose = verbose
+
 #Create a new logger mylogs
 mylogs  = logging.getLogger()
+
+#Ckeck if we should wait x seconds before start (Network interface up)
+if len(sys.argv) == 2:
+    try:
+        mylogs.info("Wait some time ... \n")
+        s = int(sys.argv[1])
+        sleep(s)
+    except Exception as e:
+        mylogs.error("ERROR IN SLEEP PARAMETER !\n")
+        mylogs.error(str(e))
 
 #Read conf file
 spath   = os.path.dirname(os.path.realpath(sys.argv[0]))
@@ -2686,6 +2766,18 @@ if (cfg.Selected_BMS != 0):
             mylogs.error("\n\nDALY BMS not found !\n")
             mylogs.error(str(e))
             printlcd("EXEPTION DALY BMS",str(e))
+            sys.exit(1)
+
+    if (cfg.Selected_BMS == 100):
+        try:
+            UBMS = uni_bms(cfg.BMS_device, 0, cfg.loglevel)
+            UBMS.bms_open()
+            sleep(0.5)
+        except Exception as e:
+
+            mylogs.error("\n\nUNIBMS not found !\n")
+            mylogs.error(str(e))
+            printlcd("EXEPTION UNIBMS",str(e))
             sys.exit(1)
 
     sleep(1) #wait until bus is ready

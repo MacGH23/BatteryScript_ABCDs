@@ -54,8 +54,13 @@ If you want to change the "default" you have to enable write EEPROM again and ch
 * Simulator, can be used for testing
 
 **BMS:**
-* JKBMS with original JK RS485 interface adapter
-* DalyBMS with original Daly UART interface adapter (no Bluetooth)
+* JKBMS with original JK RS485 interface adapter (dedicated lib)
+* DalyBMS with original Daly UART interface adapter (no Bluetooth, dedicated lib)
+* almost all BMS supported by UNIBMS lib based on [venus-os_dbus-serialbattery](https://github.com/mr-manuel/venus-os_dbus-serialbattery)
+[Supported BMS](https://mr-manuel.github.io/venus-os_dbus-serialbattery_docs/general/supported-bms/)<br>
+Note:<br>
+Currently only one single BMS is supported and not testes with all of the BMS. But should work<br>
+Use bms_test.py in UNIBMS folder to test your BMS
 
 **Power meter information:<br>**
 To adjust everything automatically, you need to get the current power.<br>
@@ -194,6 +199,16 @@ For the serial communication with Lumentree and BMS the user must be added to di
 `sudo systemctl stop ModemManager`<br>
 `sudo systemctl disable ModemManager`<br>
 
+- Disable Lumentree during startup<br>
+Since Lumentree devices startup with max. watt output during AC on (e.g. resume from power failure), you should add "lt232test setwatt 0" to crontab<br>
+Be sure that the device path "/dev/USBx" in lt232test is correct  and working !<br>
+Change the path to the right one.<br>
+
+```
+crontab -e
+(add at the end:)
+@reboot /home/pi/ABCDs/DisCharger/lt232test.py setwatt 0
+```
 - Lumentree should not be updated too quickly <br>
 Setting recommendation: <br>
 LastDisChargePower_delta = 15 (between 10..20)<br>
@@ -254,5 +269,6 @@ Thanks to:<br>
 https://github.com/stcan/meanwell-can-control for first idea for this script<br>
 https://github.com/reserve85/HoymilesZeroExport where I take the code for the http meter request<br>
 https://github.com/fah/jk-bms for the JKBMS interface<br>
-https://github.com/dreadnought/python-daly-bms for Daly BMS interface
+https://github.com/dreadnought/python-daly-bms for Daly BMS interface<br>
+https://github.com/mr-manuel/venus-os_dbus-serialbattery for base of UNIBMS BMS interface<br>
 

@@ -20,7 +20,9 @@
 i_changed_my_config = 0
 
 #If you use BS_Start for multible configuration, the last used is saved
-BSstart_UsedConfig = 0
+BSstart_UsedConfig = 1
+#Check Server for Meter before startup to be sure you can connect.
+BSstart_UseServerPing   = 1
 
 # Enter Loglevel 0,10,20,30,40,50 
 # CRITICAL   50
@@ -83,7 +85,9 @@ WSipadr =
 # Software  = 1 #not fully implemented 
 # JKBMS     = 2
 # DalyBMS   = 3
-Selected_BMS = 0
+# UNIBMS    = 100 #Universal BMS lib based on https://github.com/mr-manuel/venus-os_dbus-serialbattery
+#                 uses autodetect or BMS list in /UNIBMS/config.ini !
+Selected_BMS = 100
 
 #BMS Device
 # e.g.
@@ -156,10 +160,10 @@ PowerControlmethod = 1
 Selected_Device_Charger = 255
 
 ### USED DISCHARGER ######################################################
-# BIC-2200 			     = 0
-# Lumentree 			 = 1
-# Soyo 1000W/1200W RS485 = 2
-# Simulator = 255
+# BIC-2200                 = 0
+# Lumentree                = 1
+# Soyo 1000W/1200W RS485   = 2
+# Simulator                = 255
 Selected_Device_DisCharger = 255
 
 ###########################################################################
@@ -168,7 +172,15 @@ Selected_Device_DisCharger = 255
 # Time between two meter updates in seconds
 # Irgore updates smaller then x seconds and wait for next meter update
 # Only in full seconds ! (NO 1.5)
-MeterDelaytime = 2
+MeterDelaytime = 1
+
+# Script needs the Meter Power in 
+# Positive value = Get power from grid
+# Negavite value = Get power from PV Solar
+# If your Meter send the data in oposite way, you can adjust it here
+# This is very critical for the correct calculation !
+# Be sure that this is right !
+MeterSwapValue = 0
 
 # If you want to stop the charger if connection to meter is lost 
 # to prevent overcharge or costs
@@ -181,6 +193,7 @@ MeterStopOnConnectionLost = 1
 GetPowerOption  = 0
 
 # http Request option
+# http device have to send WATT + and - : positiv = from Grid, negative = from Solar/Battery
 # which http request should be used
 # IP and port
 # 0 = not used !
@@ -229,6 +242,23 @@ mqttpublishBatVolt  = Battery/Status/BatteryVoltage
 #mqttPublish of mqttpublishWATT only of above +/- value to broker
 #0 = disable (mainly for BIC2200 with always on)
 mqttpublishWATTCut     = 0
+
+#self defined mqtt actions
+#topic, payload and name for web
+#name without " " spaces !
+#paylod is static, for sripting at mqtt server
+mqttaction1topic    = TOPIC/NAME
+mqttaction1payload  = 0
+mqttaction1name     = NOT_DEFINED
+mqttaction2topic    = TOPIC/NAME
+mqttaction2payload  = 0
+mqttaction2name     = NOT_DEFINED
+mqttaction3topic    = TOPIC/NAME
+mqttaction3payload  = 0
+mqttaction3name     = NOT_DEFINED
+mqttaction4topic    = TOPIC/NAME
+mqttaction4payload  = 0
+mqttaction4name     = NOT_DEFINED
 
 ##########################################################################
 #### ( D I S ) - C H A R G E R - C O N F I G #############################
@@ -455,7 +485,7 @@ MW_NPB_ChargeVoltCorr    = 0
 MW_BIC_ChargeVoltCorr    = 0
 MW_BIC_DisChargeVoltCorr = 0
 
-#Do not switch the BIC on/off during charging / discharging. Only switch direction.
+#Do not switch the BIC2200 on/off during charging / discharging. Only switch direction.
 #be carefull !! This can cause an overcharge problem if the CellvoltageMax is set too high (max 345 !)
 #If the Battery is empty the BIC will use power form the grid to hold CellvoltageMin ! 
 #Only use this option if you use BIC2200 as charger and discharger !
