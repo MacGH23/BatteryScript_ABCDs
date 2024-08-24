@@ -53,7 +53,8 @@ If you want to change the "default" you have to enable write EEPROM again and ch
 * Sun1000/2000 inverters with TruckiRS485 PCB should also work with UART and RS485, but not tested <br>
 * Simulator, can be used for testing
 
-**BMS:**
+**BMS:**<br>
+Note: Use a wired connection if possible, Bluetooth is not recommended !<br>
 * JKBMS with original JK RS485 interface adapter (dedicated lib)
 * DalyBMS with original Daly UART interface adapter (no Bluetooth, dedicated lib)
 * almost all BMS supported by UNIBMS lib based on [venus-os_dbus-serialbattery](https://github.com/mr-manuel/venus-os_dbus-serialbattery)
