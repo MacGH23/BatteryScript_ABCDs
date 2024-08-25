@@ -198,7 +198,7 @@ class Daly(Battery):
                 self.write_charge_discharge_mos(ser)
 
                 if utils.AUTO_RESET_SOC:
-                    self.update_soc(ser)
+                    self.update_soc_on_bms(ser)
 
         except OSError:
             logger.warning("Couldn't open serial port")
@@ -211,7 +211,7 @@ class Daly(Battery):
 
         return result
 
-    def update_soc(self, ser):
+    def update_soc_on_bms(self, ser):
         if self.last_charge_mode is not None and self.charge_mode is not None:
             if not self.last_charge_mode.startswith(
                 "Float"
@@ -253,33 +253,58 @@ class Daly(Battery):
         return True
 
     def read_soc_data(self, ser):
-        # Ensure data received is valid
-        crntMinValid = -(utils.MAX_BATTERY_DISCHARGE_CURRENT * 2.1)
-        crntMaxValid = utils.MAX_BATTERY_CHARGE_CURRENT * 1.3
-        triesValid = 2
-        while triesValid > 0:
-            triesValid -= 1
+
+        result = True
+        read_tries = 1
+
+        # try to read data 3 times
+        while read_tries <= 3:
+            read_tries += 1
             soc_data = self.request_data(ser, self.command_soc)
+
             # check if connection success
             if soc_data is False:
+                # if no data received, skip the rest of the loop and try again
                 continue
 
             voltage, tmp, current, soc = unpack_from(">hhhh", soc_data)
+
+            voltage = voltage / 10
             current = (
                 (current - self.CURRENT_ZERO_CONSTANT)
                 / -10
                 * utils.INVERT_CURRENT_MEASUREMENT
             )
-            if crntMinValid < current < crntMaxValid:
-                self.voltage = voltage / 10
+            soc = soc / 10
+
+            # check if voltage is between threshold
+            if 8 <= voltage <= 70:
+                self.voltage = voltage
+            else:
+                result = False
+
+            # check if current is between threshold
+            if abs(current) < 1000:
                 # apply exponential smoothing on the flickering current measurement
                 self.current = (0.1 * current) + (
                     0.9 * (0 if self.current is None else self.current)
                 )
-                self.soc = soc / 10
+            else:
+                result = False
+
+            # check if soc is between threshold
+            if 0 <= soc <= 100:
+                self.soc = soc
+            else:
+                result = False
+
+            if result:
                 return True
 
-            logger.warning("read_soc_data - triesValid " + str(triesValid))
+            logger.warning(
+                f"read_soc_data - try #{read_tries}: voltage: {voltage}, current: {current}, soc: {soc}"
+            )
+
         return False
 
     def read_alarm_data(self, ser):
@@ -527,6 +552,7 @@ class Daly(Battery):
             return False
 
         (capacity, cell_volt) = unpack_from(">LL", capa_data)
+
         if capacity is not None and capacity > 0:
             self.capacity = capacity / 1000
             return True
@@ -554,10 +580,13 @@ class Daly(Battery):
 
         battery_code = ""
         # logger.warning("data " + utils.bytearray_to_string(cells_volts_data))
+
         for i in range(5):
             nr, part = unpack_from(">B7s", data, i * 8)
+
             if nr != i + 1:
                 logger.debug("bad battery code index")  # use string anyhow, just warn
+
             battery_code += part.decode("utf-8")
 
         if battery_code != "":
@@ -566,6 +595,7 @@ class Daly(Battery):
                 " ",
                 (battery_code.replace("\x00", " ").strip()),
             )
+
         return True
 
     def unique_identifier(self) -> str:

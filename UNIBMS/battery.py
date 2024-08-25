@@ -2072,34 +2072,34 @@ class Battery(ABC):
         Get the current from the battery.
         If an external current sensor is connected, use that value.
         """
-        logger.debug(
-            f"current: {self.current} - current_external: {self.current_external}"
-        )
         if self.current_external is not None:
+            logger.debug(
+                f"current: {self.current} - current_external: {self.current_external}"
+            )
             return self.current_external
         return self.current
 
     def manage_error_code(self, error_code: int = 8) -> None:
         """
         This method is used to process errors.
-        It sets the error code after 100 errors within 24 hours.
+        It sets the error code after 180 errors within 3 hours.
 
         :param error_code: The error code to display
         """
         self.error_timestamps.append(int(time()))
 
-        # only keep last 100 errors
-        if len(self.error_timestamps) > 100:
+        # only keep last 180 errors
+        if len(self.error_timestamps) > 180:
             # remove first element
             self.error_timestamps.pop(0)
 
         # check if
-        #     there are more or equal to 100 errors
-        #     the first error in the list is within the last 24 hours
+        #     there are more or equal to 180 errors
+        #     the first error in the list is within the last 3 hours
         #     the error code is different from the current error
         if (
-            len(self.error_timestamps) >= 100
-            and int(time()) - self.error_timestamps[0] <= 86400
+            len(self.error_timestamps) >= 180
+            and int(time()) - self.error_timestamps[0] <= (60 * 60 * 3)
             and self.error_code != error_code
         ):
             # set error code
@@ -2110,12 +2110,12 @@ class Battery(ABC):
         This method is used to reset the error code.
         """
         # check if
-        #     there are more or equal to 100 errors
-        #     the first error in the list is not within the last 24 hours
+        #     there are more or equal to 180 errors
+        #     the first error in the list is not within the last 3 hours
         #     the error code is not already None
         if (
-            len(self.error_timestamps) >= 100
-            and int(time()) - self.error_timestamps[0] > 86400
+            len(self.error_timestamps) >= 180
+            and int(time()) - self.error_timestamps[0] > (60 * 60 * 3)
             and self.error_code is not None
         ):
             self.error_code = None

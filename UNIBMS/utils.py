@@ -14,7 +14,7 @@ import serial
 
 
 # CONSTANTS
-DRIVER_VERSION: str = "1.4.20240806dev"
+DRIVER_VERSION: str = "1.4.20240824dev"
 """
 current version of the driver
 """
@@ -44,7 +44,6 @@ custom_config_file_path = path.joinpath(PATH_CONFIG_USER).absolute().__str__()
 config.read([default_config_file_path, custom_config_file_path])
 
 # get logging level from config file
-
 if config["DEFAULT"]["LOGGING"].upper() == "ERROR":
     logger.setLevel(logging.ERROR)
 elif config["DEFAULT"]["LOGGING"].upper() == "WARNING":

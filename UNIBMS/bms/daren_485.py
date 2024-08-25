@@ -297,6 +297,12 @@ class Daren485(Battery):
                 else:
                     self.protection.low_cell_voltage = 0
 
+                # check bit 7 for low_BAT_alarm from warningstatus
+                if warningstatus & (1 << 7):
+                    self.protection.low_soc = 2
+                else:
+                    self.protection.low_soc = 0
+
                 # check bit 2 for CHG_OC_PROT
                 if currentstatus & (1 << 2):
                     self.protection.high_charge_current = 2
@@ -328,10 +334,11 @@ class Daren485(Battery):
                 else:
                     self.protection.cell_imbalance = 0
 
-                # if something is in warning, report internal failure. warningstatus
+                # if something else is in warning, report internal failure. warningstatus
                 # contains all sorts of internal components, such as CHG_FET, NTC_fail,
                 # cell_fail, chg_mos_fail, disch_mos_fail, etc.
-                if warningstatus > 0:
+                # Ignore V_DIF_alarm and low_BAT_alarm flags, since we're allready checking for those.
+                if (warningstatus & 0b01111110) > 0:
                     self.protection.internal_failure = 2
                 else:
                     self.protection.internal_failure = 0
@@ -380,6 +387,12 @@ class Daren485(Battery):
                     self.protection.high_internal_temp = 1
                 else:
                     self.protection.high_internal_temp = 0
+
+                # check bit 13 for blown_fuse from voltagestatus
+                if voltagestatus & (1 << 13):
+                    self.protection.fuse_blown = 2
+                else:
+                    self.protection.fuse_blown = 0
 
                 if fetstatus & (1 << 0):
                     self.charge_fet = True

@@ -32,7 +32,7 @@
 # Temp_1   in�C                                                                                                   
 # temp_2   in�C                                                                                                   
 # BatVolt in *100 notation -> 2380 = 23,80V                                                                                                    
-# Current in *100 notation -> 1300 = 13,00A; positive = Charge current, negative = DisCharge current 
+# Current in *100 notation -> 1300 = 13,00A; positive = DisCharge current, negative = Charge current 
 # SOC     in % (0..100)                                                                                                         
 #
 # Version history
@@ -203,7 +203,22 @@ class uni_bms:
             # check if MODBUS_ADDRESSES is not empty
             if utils.MODBUS_ADDRESSES:
                 for address in utils.MODBUS_ADDRESSES:
-                    self.battery[address] = self.get_battery(self.devpath, address)
+                    checkbatt = self.get_battery(self.devpath, address)
+                    if checkbatt is not None:
+                        self.battery[address] = checkbatt
+                        logger.info(
+                            "Successful battery connection at "
+                            + self.devpath
+                            + " and this Modbus address "
+                            + str(address)
+                        )
+                    else:
+                        logger.warning(
+                            "No battery connection at "
+                            + self.devpath
+                            + " and this Modbus address "
+                            + str(address)
+                        )
             # use default address
             else:
                 self.battery[0] = self.get_battery(self.devpath)
@@ -212,18 +227,8 @@ class uni_bms:
         battery_found = False
 
         for key_address in self.battery:
-
             if self.battery[key_address] is not None:
                 battery_found = True
-            elif key_address != 0:
-                # remove item from battery dict so that only the found batteries are used
-                del self.battery[key_address]
-                logging.warning(
-                    "No battery connection at "
-                    + self.devpath
-                    + " and this Modbus address "
-                    + str(key_address)
-                )
 
         if not battery_found:
             logging.error(
