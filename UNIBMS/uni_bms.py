@@ -75,7 +75,7 @@ import struct
 from typing import Union
 from time import sleep
 
-from bmshelper import bmsHelper
+from bmshelper import DbusHelper
 from utils import logger
 import utils
 from battery import Battery
@@ -103,45 +103,48 @@ if "MNB" in utils.BMS_TYPE:
 if "Sinowealth" in utils.BMS_TYPE:
     from bms.sinowealth import Sinowealth
 
-supported_bms_types = [
-    {"bms": Jkbms, "baud": 115200},
-    {"bms": Jkbms_pb, "baud": 115200, "address": b"\x01"},
-    {"bms": Daly, "baud": 9600, "address": b"\x40"},
-    {"bms": Daly, "baud": 9600, "address": b"\x80"},
-    {"bms": Daren485, "baud": 19200, "address": b"\x01"},
-    {"bms": Ecs, "baud": 19200},
-    {"bms": EG4_Lifepower, "baud": 9600, "address": b"\x01"},
-    {"bms": EG4_LL, "baud": 9600, "address": b"\x01"},
-    {"bms": HeltecModbus, "baud": 9600, "address": b"\x01"},
-    {"bms": HLPdataBMS4S, "baud": 9600},
-    {"bms": LltJbd, "baud": 9600},
-    {"bms": Renogy, "baud": 9600, "address": b"\x30"},
-    {"bms": Renogy, "baud": 9600, "address": b"\xF7"},
-    {"bms": Seplos, "baud": 19200, "address": b"\x00"},
-    {"bms": Seplosv3, "baud": 19200},
-]
-
-# enabled only if explicitly set in config under "BMS_TYPE"
-if "ANT" in utils.BMS_TYPE:
-    supported_bms_types.append({"bms": ANT, "baud": 19200})
-if "MNB" in utils.BMS_TYPE:
-    supported_bms_types.append({"bms": MNB, "baud": 9600})
-if "Sinowealth" in utils.BMS_TYPE:
-    supported_bms_types.append({"bms": Sinowealth, "baud": 9600})
-
-expected_bms_types = [
-    battery_type
-    for battery_type in supported_bms_types
-    if battery_type["bms"].__name__ in utils.BMS_TYPE or len(utils.BMS_TYPE) == 0
-]
 
 
 #########################################
 ##class
 class uni_bms:
 
+    def init_bms_types(self):
+        self.supported_bms_types = [
+        {"bms": Jkbms, "baud": 115200},
+        {"bms": Jkbms_pb, "baud": 115200, "address": b"\x01"},
+        {"bms": Daly, "baud": 9600, "address": b"\x40"},
+        {"bms": Daly, "baud": 9600, "address": b"\x80"},
+        {"bms": Daren485, "baud": 19200, "address": b"\x01"},
+        {"bms": Ecs, "baud": 19200},
+        {"bms": EG4_Lifepower, "baud": 9600, "address": b"\x01"},
+        {"bms": EG4_LL, "baud": 9600, "address": b"\x01"},
+        {"bms": HeltecModbus, "baud": 9600, "address": b"\x01"},
+        {"bms": HLPdataBMS4S, "baud": 9600},
+        {"bms": LltJbd, "baud": 9600},
+        {"bms": Renogy, "baud": 9600, "address": b"\x30"},
+        {"bms": Renogy, "baud": 9600, "address": b"\xF7"},
+        {"bms": Seplos, "baud": 19200, "address": b"\x00"},
+        {"bms": Seplosv3, "baud": 19200},
+        ]
+
+        # enabled only if explicitly set in config under "BMS_TYPE"
+        if "ANT" in utils.BMS_TYPE:
+            self.supported_bms_types.append({"bms": ANT, "baud": 19200})
+        if "MNB" in utils.BMS_TYPE:
+            self.supported_bms_types.append({"bms": MNB, "baud": 9600})
+        if "Sinowealth" in utils.BMS_TYPE:
+            self.supported_bms_types.append({"bms": Sinowealth, "baud": 9600})
+
+        self.expected_bms_types = [
+            battery_type
+            for battery_type in self.supported_bms_types
+            if battery_type["bms"].__name__ in utils.BMS_TYPE or len(utils.BMS_TYPE) == 0
+        ]
+
     def __init__(self, devpath, driverOption, loglevel):
         #init with default
+        self.init_bms_types()
         self.devpath  = "/dev/ttyUSB0" #just try if is is the common devpath
         self.loglevel = 20             #just use info as default
         self.driveroption = driverOption
@@ -157,6 +160,18 @@ class uni_bms:
 
     def bms_open(self):
         logging.info("open serial interface")
+		# check if utils.BMS_TYPE is not empty and all BMS types in the list are supported
+        if len(utils.BMS_TYPE) > 0:
+            for bms_type in utils.BMS_TYPE:
+                if bms_type not in [bms["bms"].__name__ for bms in self.supported_bms_types]:
+                    logging.error(
+                        f'ERROR >>> BMS type "{bms_type}" is not supported. Supported BMS types are: '
+                        + f"{', '.join([bms['bms'].__name__ for bms in self.supported_bms_types])}"
+                        + "; Disabled by default: ANT, MNB, Sinowealth"
+                    )
+                    raise Exception("BMS DEVICE NOT IN SUPPORTED LIST")
+
+
         if(self.driveroption != 0):
             """
             Import ble classes only, if it's a ble port, else the driver won't start due to missing python modules
@@ -185,14 +200,14 @@ class uni_bms:
                 from bms.jkbms_can import Jkbms_Can
 
                 # only try CAN BMS on CAN port
-                supported_bms_types = [
+                self.supported_bms_types = [
                     {"bms": Daly_Can, "baud": 250000},
                     {"bms": Jkbms_Can, "baud": 250000},
                 ]
 
-            expected_bms_types = [
+            self.expected_bms_types = [
                 battery_type
-                for battery_type in supported_bms_types
+                for battery_type in self.supported_bms_types
                 if battery_type["bms"].__name__ in utils.BMS_TYPE
                 or len(utils.BMS_TYPE) == 0
             ]
@@ -244,7 +259,7 @@ class uni_bms:
 
 
         for key_address in self.battery:
-            self.helper[key_address] = bmsHelper(self.battery[key_address], key_address)
+            self.helper[key_address] = DbusHelper(self.battery[key_address], key_address)
             self.BatIds.append(key_address)
 
         # print log at this point, else not all data is correctly populated
@@ -262,7 +277,7 @@ class uni_bms:
                 "-- Testing BMS: " + str(retry) + " of " + str(retries) + " rounds"
             )
             # create a new battery object that can read the battery and run connection test
-            for test in expected_bms_types:
+            for test in self.expected_bms_types:
                 # noinspection PyBroadException
                 try:
                     if _modbus_address is not None:

@@ -28,6 +28,7 @@
 # macGH 16.02.2024  Version 0.1.5: Added Firmware read
 # macGH 26.03.2024  Version 0.1.6: Update system config
 # macGH 13.05.2024  Version 0.1.7: Set Output to 0 too low or high, val is changed to min/max out value of device, added decode NPB Curve
+# macGH 24.09.2024  Version 0.1.8: Addad Fanspeed for BIC2200
 
 
 import os
@@ -339,12 +340,13 @@ class mwcan:
         f = 0
         for name, interface in ifcfg.interfaces().items():
             # Check for Can0 interface
+            logging.debug("can checkcandevice: " + name + " - " + str(interface))
             if interface['device'] == val:
                 f = 1
                 #can0 always found if slcand with RS232CAN is used, even when deleted
                 #workaround because of bug in ifcfg, check if up and running
                 logging.info("Found can0 interface. Check if already up ... ")
-                if interface['flags'] == "193<UP,RUNNING,NOARP> ":  
+                if(interface['flags'] == "193<UP,RUNNING,NOARP> "):  
                     f = 2
                     logging.info("Found can0 interface. Already created.")
         return f
@@ -397,7 +399,7 @@ class mwcan:
         self.CAN_DEVICE    = devpath
         
         self.can_set_ADR(usedmwdev, mwcanid)
-        
+      
         logging.debug("CAN device  : " + self.CAN_DEVICE)
         logging.debug("CAN adr to  : " + str(self.CAN_ADR))
         logging.debug("CAN adr from: " + self.CAN_ADR_R)
@@ -423,11 +425,14 @@ class mwcan:
         if self.can0found < 2: #2 = fully up, #1 = created but not up, #0 = can0 not exists, mostly RS232 devices 
             if self.can0found == 0: 
                 os.system('sudo slcand -f -s5 -o ' + self.CAN_DEVICE) #looks like a RS232 device, bring it up 
+                logging.debug("can_up: RS232 DEVICE ?")
 
+            logging.debug("can_up: Link Set")
             os.system('sudo ip link set can0 up type can bitrate 250000')
             os.system('sudo ip link set up can0 txqueuelen 1000')
         
         # init interface for using with this class
+        logging.debug("can_up: init SocketCan")
         self.can0 = can.interface.Bus(channel = 'can0', bustype = 'socketcan')
         
         #Get Meanwell device and set parameter from mwcan.ini file
@@ -440,6 +445,7 @@ class mwcan:
     def can_down(self):
         self.can0.shutdown() #Shutdown our interface
         if self.can0found < 2: #only shutdown system can0 if it was created by us
+            logging.info("can_down: shutdown CAN0")
             os.system('sudo ip link set can0 down')
             os.system('sudo ip link del can0')
         else:
@@ -756,6 +762,18 @@ class mwcan:
     #############################################################################
     ##BIC-2200 only - charge dischagre functions
     #############################################################################
+    def BIC_fanspeed1(self): 
+        logging.debug("set direction charge 0x0100")
+        # Command Code 0x0070
+        # read fanspeed 1
+        return self.can_read_write(0x70,0x00,0,0)
+
+    def BIC_fanspeed2(self): 
+        logging.debug("set direction charge 0x0100")
+        # Command Code 0x0071
+        # read fanspeed 2
+        return self.can_read_write(0x71,0x00,0,0)
+
     def BIC_chargemode(self,rw,val): #0=charge, 1=discharge
         logging.debug("set direction charge 0x0100")
         # Command Code 0x0100

@@ -8,7 +8,11 @@ from utils import logger
 import utils
 from xml.etree import ElementTree
 
-class bmsHelper:
+class DbusHelper:
+    """
+    This class is used to handle all the BMS communication. For easier comparision it still named dbushelper
+    """
+
     EMPTY_DICT = {}
 
     def __init__(self, battery, bms_address=None):
@@ -17,7 +21,7 @@ class bmsHelper:
         self.instance = 1
         self.settings = None
         self.error = {"count": 0, "timestamp_first": None, "timestamp_last": None}
-        self.cell_voltages_good = False
+        self.cell_voltages_good = None
         self.path_battery = None
         self.save_charge_details_last = {
             "allow_max_voltage": self.battery.allow_max_voltage,
@@ -37,15 +41,21 @@ class bmsHelper:
                 # reset error variables
                 self.error["count"] = 0
                 self.battery.online = True
+                self.battery.connection_info = "Connected"
 
                 # unblock charge/discharge, if it was blocked when battery went offline
                 if utils.BLOCK_ON_DISCONNECT:
                     self.battery.block_because_disconnect = False
 
+                # reset cell voltages good
+                if self.cell_voltages_good is not None:
+                    self.cell_voltages_good = None
+
             else:
                 # update error variables
                 if self.error["count"] == 0:
                     self.error["timestamp_first"] = int(time())
+
                 self.error["timestamp_last"] = int(time())
                 self.error["count"] += 1
 
@@ -84,6 +94,7 @@ class bmsHelper:
             '''
         except Exception:
             traceback.print_exc()
+
 
     def Log_Data(self):
         # Update SOC, DC and System items

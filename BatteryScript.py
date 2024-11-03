@@ -60,6 +60,9 @@
 # macGH 24.08.2024  Version 0.4.0: Added UNIBMS based on https://github.com/mr-manuel/venus-os_dbus-serialbattery -> much more BMS supported now
 #                                  Added power swap if meter send the value in wrong format
 #                                  Addad customizable mqtt actions for web interface
+# macGH 27.08.2024  Version 0.4.1: Added BMSConnectionLost status
+# macGH 09.10.2024  Version 0.4.2: Added LCDReinit for webinterface
+# macGH 29.10.2024  Version 0.4.3: Added BIC2200 almost empty
 
 import os
 import sys
@@ -122,6 +125,9 @@ class WS(BaseHTTPRequestHandler):
 
             if((parameter=='EstBatteryWh')):
                 Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Reset to 0</button></form>'
+
+            if((parameter=='ReInitLCD')):
+                Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Reinit i2c LCD</button></form>'
 
             if((parameter=='Reboot') or (parameter=='Shutdown') or ('RestartMethod' in parameter)):
                 Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Press 3 times</button></form>'
@@ -264,6 +270,7 @@ class WS(BaseHTTPRequestHandler):
                       self._gettableentry('MW_BIC_COUNTER',cfg.MW_BIC_COUNTER) + \
                       self._gettableentry('LT_COUNTER',status.ltcounter) + \
                       self._gettableentry('WebAutoRefresh',status.WebAutoRefresh) + \
+                      self._gettableentry('ReInitLCD','') + \
                       '</tbody>\n' + \
                       '</table>\n'+ \
                       '</form>\n' + \
@@ -377,6 +384,10 @@ class WS(BaseHTTPRequestHandler):
                         os.system('sudo shutdown -P now')
                     self.wfile.write(self._systemhtml(todo))
 
+                if(variable == 'ReInitLCD'):
+                    LCDinit()
+                    self.wfile.write(self._statushtml(todo))
+
                 if('Restart' in variable):
                     n = variable[-1]
                     p = os.path.dirname(__file__)
@@ -447,7 +458,8 @@ class Devicestatus:
         self.LastWattValueUsedinDevice  = 0   # Used in the Device charger or discharger; -x = SOLAR, +x = GRID depends on max min vlaues
         self.LastChargerSetCurrent      = 0
         self.LastChargerGetCurrent      = 0
-        self.LastDisChargerCurrent      = 0
+        self.LastDisChargerGetCurrent   = 0
+        self.LastDisChargerSetCurrent   = 0
         self.BICChargeDisChargeMode     = 0   # 0=Charge, 1 = DisCharge
         self.LastChargerMode            = 0
         self.ChargerStatus              = 0
@@ -461,6 +473,7 @@ class Devicestatus:
         self.BMSSOC                     = 100 # Battery State of Charge status if BMS is used, if not 100% is used
         self.BMSCurrent                 = 0
         self.BMSVoltage                 = 0   # Voltage of BMS
+        self.BMSConnectionLost          = 0   # Status of BMS read operation  
         self.EstBatteryWh               = 0
         self.ChargerVoltage             = 0   # Voltage of Charger
         self.DisChargerVoltage          = 0   # Voltage of DisCharger
@@ -656,10 +669,11 @@ class chargerconfig:
             self.mqttaction4name           =  updater["Setup"]["mqttaction4name"].value
 
             self.Selected_BMS              =  int(updater["Setup"]["Selected_BMS"].value)
+            self.UNIBMSType                =  int(updater["Setup"]["UNIBMSType"].value)
             self.BMS_device                =  updater["Setup"]["BMS_device"].value
             self.BMS_daly_use_sinowealth   =  updater["Setup"]["BMS_daly_use_sinowealth"].value
-            self.BMS_minSOC                 =  int(updater["Setup"]["BMS_minSOC"].value)
-            self.BMS_RestartSOC             =  int(updater["Setup"]["BMS_RestartSOC"].value)
+            self.BMS_minSOC                =  int(updater["Setup"]["BMS_minSOC"].value)
+            self.BMS_RestartSOC            =  int(updater["Setup"]["BMS_RestartSOC"].value)
             self.BMS_MaxTempMosFet         =  int(updater["Setup"]["BMS_MaxTempMosFet"].value)
             self.BMS_MaxTemp1              =  int(updater["Setup"]["BMS_MaxTemp1"].value)
             self.BMS_MaxTemp2              =  int(updater["Setup"]["BMS_MaxTemp2"].value)
@@ -787,6 +801,7 @@ class chargerconfig:
 
             mylogs.info("-- BMS --                   ")
             mylogs.info("Selected_BMS:               " + str(self.Selected_BMS))
+            mylogs.info("UNIBMSType:                 " + str(self.UNIBMSType))
             mylogs.info("BMS_device:                 " + str(self.BMS_device))
             mylogs.info("BMS_minSOC:                 " + str(self.BMS_minSOC))
             mylogs.info("BMS_RestartSOC:             " + str(self.BMS_RestartSOC))
@@ -959,9 +974,9 @@ def CheckPatameter():
     mylogs.info("Parameter check OK")
     return 0
 
-def MW_EEPROM_Counter_INC(ChargerDisChargemode): #CD = 0: Charger; 1: DisCharger
+def MW_EEPROM_Counter_INC(ChargerDisChargemode, force=0): #CD = 0: Charger; 1: DisCharger, force for BIC change direction and on/off
     mylogs.debug("MW_EEPROM_Counter_INC Mode: " + str(ChargerDisChargemode))
-    if(status.MW_EEPromOff == 1):
+    if((status.MW_EEPromOff == 1) and (force == 0)):
         mylogs.debug("MW_EEPROM_WRITE disabled in Firmware :-)")
         return
 
@@ -1023,6 +1038,17 @@ def logstatus():
 #####################################################################
 # LCD routine
 #####################################################################
+def LCDinit():
+    mylogs.info("Init display")
+    if (cfg.Selected_LCD == 1):
+        try:
+          display = i2clcd(cfg.lcdi2cadr)
+          display.lcd_clear()
+        except Exception as e:
+            mylogs.error("\n\nEXECETION INIT DISPLAY !\n")
+            mylogs.error(str(e))
+
+
 def printlcd(line1="", line2=""):
     if (cfg.Selected_LCD == 0): return
     try:
@@ -1086,6 +1112,7 @@ def GetBMSData():
     mylogs.debug("GetBMSData entry:")
     if (cfg.Selected_BMS == 0): #disabled return always full for further checks, you should really use a SOC methode ! 
         status.BMSSOC = 100
+        status.BMSConnectionLost = 0
         return status.BMSSOC
 
     #Software BMS, calculate form DC Voltage, not very exact yet ;-)
@@ -1111,6 +1138,7 @@ def GetBMSData():
         """
 
         status.BMSSOC = SocVal
+        status.BMSConnectionLost = 0
         return status.BMSSOC
 
     try:
@@ -1128,12 +1156,6 @@ def GetBMSData():
             ST = UBMS.bms_read();
 
 
-    except Exception as e:
-        mylogs.error("BMS READ EXEPTION !")
-        mylogs.error(str(e))
-        status.BMSSOC = 0
-
-    try:
         BMSstatus.CellCount      = ST[0]
         for i in range(ST[0]) :                                                                             
             BMSstatus.BMSCellVoltage[i] = ST[i+1]                                                                                                    
@@ -1152,8 +1174,10 @@ def GetBMSData():
         status.BMSCurrent = BMSstatus.BMSCurrent
         status.BMSSOC     = BMSstatus.BMSSOC 
 
+        CVolt = ""
         mylogs.debug("Cellcount: " + str(BMSstatus.CellCount))
         for i in range(BMSstatus.CellCount) :
+            CVolt = CVolt + "C" + str(i) + ": " + str(BMSstatus.BMSCellVoltage[i]/1000) + " "
             mylogs.debug("BMS: CellVolt" + str(i) + ": " + str(BMSstatus.BMSCellVoltage[i]/1000))
         mylogs.debug("BMS: Temp_Fet : " + str(BMSstatus.BMSTemp_Mosfet))
         mylogs.debug("BMS: Temp_1   : " + str(BMSstatus.BMSTemp1))
@@ -1162,13 +1186,29 @@ def GetBMSData():
         mylogs.debug("BMS: Current  : " + str(BMSstatus.BMSCurrent/100))
         mylogs.debug("BMS: BMSSOC   : " + str(BMSstatus.BMSSOC))
 
+        mylogs.info("BMSData: " + str(BMSstatus.BMSVoltage/100) + "V  " + str(BMSstatus.BMSCurrent/100) + \
+                    "A  " + str(BMSstatus.BMSSOC) + "%  " + CVolt)
+        status.BMSConnectionLost = 0
         return status.BMSSOC
 
     except Exception as e:
-        mylogs.error("BMS DATA EXEPTION !")
+        mylogs.error("BMS READ ERROR. LOST CONNECTION -> STOP ALL DEVICES")
         mylogs.error(str(e))
         status.BMSSOC = 0
+        #Disable charger and discharger and stop further operation until BMS OK
+        StartStopOperationCharger(0,1)
+        StartStopOperationDisCharger(0,1)
+        status.BMSConnectionLost = status.BMSConnectionLost + 1
+        #could not read BMS -> exit or restert
+        if(status.BMSConnectionLost >= 5):
+            mylogs.error("BMS ERROR >= 5 - Exit")
+            '''
+            p = os.path.dirname(__file__)
+            subprocess.Popen([p + '/BSstart.py',0], start_new_session=True)
+            '''
+            sys.exit(1)
 
+        return
 
     mylogs.error("UNKNOWN BMS USED ! Check Configuration !")
     sys.exit(1)
@@ -1182,6 +1222,10 @@ def StartStopOperationCharger(val,force=0):
     mylogs.verbose("StartStopOperationCharger entry: " + str(val) + " Force: " + str(force))
     
     if (status.ChargerEnabled == 0):
+        val = 0
+
+    if(status.BMSConnectionLost != 0):
+        mylogs.warning("StartStopOperationDisCharger: BMS connection lost !")
         val = 0
 
     if((cfg.MW_BIC2200_ForceAlwaysOn == 1) and (status.BICChargeDisChargeMode == 1) and (val == 0) and (force == 0)):
@@ -1213,7 +1257,8 @@ def StartStopOperationCharger(val,force=0):
     Newval = val      #used for calculation later
 
     if (force==0): #if force = 1, proceeed without any logic 
-        if (status.ChargerStatus == 0) and (val == 0): 
+        #for BIC always on proceed with 0 to check status
+        if((status.ChargerStatus == 0) and (val == 0) and (cfg.MW_BIC2200_ForceAlwaysOn == 0)): 
             mylogs.verbose("StartStopOperationCharger already off mode")
             return #DisCharger already off, can stop here
     
@@ -1264,6 +1309,10 @@ def StartStopOperationDisCharger(val,force=0):
         mylogs.verbose("StartStopOperationDisCharger: DisCharger disabled !")
         val = 0
 
+    if(status.BMSConnectionLost != 0):
+        mylogs.warning("StartStopOperationDisCharger: BMS connection lost !")
+        val = 0
+
     if((cfg.MW_BIC2200_ForceAlwaysOn == 1) and (status.BICChargeDisChargeMode == 0) and (val == 0) and (force == 0)):
         mylogs.verbose("StartStopOperationDisCharger: Always on BIC Mode already set to Charge. Nothing to do here")
         return
@@ -1297,8 +1346,8 @@ def StartStopOperationDisCharger(val,force=0):
 
     Newval = val      #used for calculation
     if (force==0): #if force = 1, proceeed without any logic 
-
-        if((status.DisChargerStatus == 0) and (val == 0)): 
+        #for BIC always on proceed with 0 to check status
+        if((status.DisChargerStatus == 0) and (val == 0) and (cfg.MW_BIC2200_ForceAlwaysOn == 0)): 
             mylogs.verbose("StartStopOperationDisCharger: Already off mode")
             return #DisCharger already off, can stop here
         
@@ -1517,7 +1566,7 @@ def Charger_Meanwell_Set(val,force=0):
                 mwcandev.BIC_chargemode(1,0)  #set BIC to Chargemode
                 sleep(0.2)
                 status.BICChargeDisChargeMode = mwcandev.BIC_chargemode(0,0)
-                MW_EEPROM_Counter_INC(0)
+                MW_EEPROM_Counter_INC(0,1)
 
         #read voltage and current from NBB device
         vout  = mwcandev.v_out_read()
@@ -1655,7 +1704,7 @@ def DisCharger_BIC2200_Set(val,force=0):
             mwcandev.BIC_chargemode(1,1)  #set BIC to DisChargemode
             sleep(0.2)
             status.BICChargeDisChargeMode = mwcandev.BIC_chargemode(0,0)
-            MW_EEPROM_Counter_INC(1)
+            MW_EEPROM_Counter_INC(1,1)
 
         #read voltage from BIC device
         vout  = mwcandev.v_out_read()
@@ -1678,7 +1727,17 @@ def DisCharger_BIC2200_Set(val,force=0):
 
         #BIC device has a minimal DisCharge current
         #Stop if this value is reached or allow take power from grid to charge 
-        if (IntCurrent <= cfg.MinDisChargeCurrent):
+        if (IntCurrent < cfg.MinDisChargeCurrent):
+            if(cfg.MW_BIC2200_ForceAlwaysOn == 1): #BIC set to Min
+                IntCurrent = cfg.MinDisChargeCurrent
+                mylogs.info("Meanwell BIC: Current too small - " + str(IntCurrent) + " - MinCurrent: " + str(cfg.MinDisChargeCurrent) + " - ZeroDelta: " + str(ZeroDelta)+ " -> Always ON")
+                OPStart = True
+            else:
+                IntCurrent = 0;
+                mylogs.info("Meanwell BIC: Current too small - " + str(IntCurrent) + " - MinCurrent: " + str(cfg.MinDisChargeCurrent) + " - ZeroDelta: " + str(ZeroDelta)+ " -> Device OFF")
+                OPStart = False 
+            
+            '''
             if (IntCurrent < (cfg.MinDisChargeCurrent)):# - ZeroDelta)): 16042024
                 if(cfg.MW_BIC2200_ForceAlwaysOn == 1): #BIC set to Min
                     IntCurrent = cfg.MinDisChargeCurrent
@@ -1692,21 +1751,26 @@ def DisCharger_BIC2200_Set(val,force=0):
                 IntCurrent = cfg.MinDisChargeCurrent
                 #status.ZeroImportWatt = cfg.ZeroDeltaChargerWATT #14062024
                 mylogs.info("Meanwell BIC: ZeroExportWatt used - " + str(status.ZeroExportWatt))
-
-        if (IntCurrent != status.LastDisChargerCurrent):
+            '''
+        if (IntCurrent != status.LastDisChargerSetCurrent):
             if ((status.actchargercounter >= cfg.MeterUpdateDisChargeCounter) or (force==1)):
-                mylogs.info("Meanwell BIC: Set new current to: " + str(IntCurrent) + "  (Last current: " + str(status.LastDisChargerCurrent) + ")")
-                c = mwcandev.BIC_discharge_i(1,IntCurrent)
-                status.LastDisChargerCurrent = IntCurrent;
-                MW_EEPROM_Counter_INC(1)
-                status.actchargercounter = 1 #Reset counter to 1 
-                sleep(0.1) #wait for next read to change BIC
+                if((status.LastDisChargerGetCurrent < (status.LastDisChargerSetCurrent-50)) and (status.BMSSOC < 3)):
+                    if(status.BatteryEMPTY != 1):
+                        mylogs.info("Charger_Meanwell_Set: >>>> NO SET -> BATTERY ALMOST EMPTY: " + str(IntCurrent) + " (Last current GET: " + str(status.LastDisChargerGetCurrent)  + " ->  Last current SET: " + str(status.LastDisChargerSetCurrent) + " <<<<")
+                    OPStart = True #device start or continue
+                else:
+                    mylogs.info("Meanwell BIC: Set new current to: " + str(IntCurrent) + "  (Last current: " + str(status.LastDisChargerSetCurrent) + ")")
+                    c = mwcandev.BIC_discharge_i(1,IntCurrent)
+                    status.LastDisChargerSetCurrent = IntCurrent;
+                    MW_EEPROM_Counter_INC(1)
+                    status.actchargercounter = 1 #Reset counter to 1 
+                    sleep(0.1) #wait for next read to change BIC
             else:
                 mylogs.info("Meanwell BIC: Wait for next change: " + str(status.actchargercounter) + "  of: " + str(cfg.MeterUpdateDisChargeCounter))
                 status.actchargercounter += 1
 
         else:
-            mylogs.info("Meanwell BIC: No new DisCharge current to set. Last current: " + str(status.LastDisChargerCurrent))
+            mylogs.info("Meanwell BIC: No new DisCharge current to set. Last current: " + str(status.LastDisChargerSetCurrent))
             
         
         #try to set the new ChargeCurrent if possible
@@ -1720,10 +1784,10 @@ def DisCharger_BIC2200_Set(val,force=0):
             StartStopOperationMeanwell(0,1,force)     
 
         sleep(0.2)
-        iout  = mwcandev.i_out_read()
-        NewVal = int((iout*vout)/-10000)
+        status.LastDisChargerGetCurrent  = mwcandev.i_out_read()
+        NewVal = int((status.LastDisChargerGetCurrent*vout)/-10000)
 
-        mylogs.info("Meanwell BIC: W Battery_Vout:" + str(vout/100) + ":V: Battery_I_out:" + str(iout/100) + ":A: I Calc:" + str(IntCurrent) + " = " + str(IntCurrent/100) + ":A --> WATT: " + str(NewVal))
+        mylogs.info("Meanwell BIC: W Battery_Vout:" + str(vout/100) + ":V: Battery_I_out:" + str(status.LastDisChargerGetCurrent/100) + ":A: I Calc:" + str(IntCurrent) + " = " + str(IntCurrent/100) + ":A --> WATT: " + str(NewVal))
 
         status.LastWattValueUsedinDevice = NewVal
 
@@ -2525,8 +2589,8 @@ if (cfg.Selected_Device_Charger <=1):
                 sc  = mwcandev.system_config(1,1)
                 bic = mwcandev.BIC_bidirectional_config(1,set_bit(bic,0))
                 print("YOU HAVE TO POWER CYCLE OFF/ON THE MEANWELL BIC2200 NOW BY YOURSELF !!")
-                MW_EEPROM_Counter_INC(0)
-                MW_EEPROM_Counter_INC(0)
+                MW_EEPROM_Counter_INC(0,1)
+                MW_EEPROM_Counter_INC(0,1)
             sys.exit(1)
 
 
@@ -2576,7 +2640,7 @@ if (cfg.Selected_Device_Charger <=1):
                 sc = clear_bit(sc,2)
                 sc  = mwcandev.system_config(1,sc) #bit 10 only set to 1
                 print("YOU HAVE TO POWER CYCLE OFF/ON THE MEANWELL NPB NOW BY YOURSELF !!")
-                MW_EEPROM_Counter_INC(0)
+                MW_EEPROM_Counter_INC(0,1)
             sys.exit(1)
 
     #Set fixed charge voltage to device BIC and NPB
@@ -2637,7 +2701,7 @@ if (cfg.Selected_Device_Charger <=1):
                 status.MW_EEPromOff = 1    
                 mylogs.warning("MEANWELL SYSTEM CONFIG BIT - EEPROM WRITE NOW IS DISABLED")
                 mylogs.warning("YOU HAVE TO POWER CYCLE OFF/ON THE MEANWELL DEVICE NOW BY YOURSELF !!")
-                MW_EEPROM_Counter_INC(0)
+                MW_EEPROM_Counter_INC(0,1)
                 sys.exit(1)
     else:
         status.MW_EEPromOff = 1    
@@ -2677,55 +2741,58 @@ if ((cfg.Selected_Device_DisCharger == 1) or (cfg.lt_foreceoffonstartup == 1)):
         sleep(0.2)
         status.LT1_Temperature = int(LT1.readtemp())
         sleep(0.2)
+        mylogs.debug("LT1 temperature: " + str(status.LT1_Temperature))
+        mylogs.debug("LT1 set output to 0")
+        LT1.set_watt_out(0) #init with 0 #init with 0, force without any function above
+        sleep(0.3)
+        cfg.MaxDisChargeWATT = cfg.lt1_maxwatt
     except Exception as e:
         mylogs.error("\n\nLumentree Device 1 not found !\n")
         mylogs.error(str(e))
-        printlcd("EXCEPTION Lumentree1",str(e))
-        sys.exit(1)
+        if ((cfg.Selected_Device_DisCharger != 1) and (cfg.lt_foreceoffonstartup == 1)): 
+            mylogs.info("Lumentree Init FORCE OFF MODE ASSUME NOT PRESENT -> CONTINUE !")
+        else:
+            printlcd("EXCEPTION Lumentree1",str(e))
+            sys.exit(1)
 
-    mylogs.debug("LT1 temperature: " + str(status.LT1_Temperature))
-    mylogs.debug("LT1 set output to 0")
-    LT1.set_watt_out(0) #init with 0 #init with 0, force without any function above
-    sleep(0.3)
-    cfg.MaxDisChargeWATT = cfg.lt1_maxwatt
 
     if (cfg.lt_count > 1):
         try:
             LT2 = lt232(cfg.lt_devtype,cfg.lt2_device,cfg.lt2_address,cfg.loglevel)
             LT2.lt232_open()
+            status.LT2_Temperature = int(LT2.readtemp())
+            sleep(0.2)
+            mylogs.debug("LT2 temperature: " + str(status.LT2_Temperature))
+            mylogs.debug("LT2 set output to 0")
+            LT2.set_watt_out(0) #init with 0, force without any function above
+            sleep(0.2)
+            cfg.MaxDisChargeWATT = cfg.MaxDisChargeWATT + cfg.lt2_maxwatt
         except Exception as e:
             mylogs.error("\n\nLumentree Device 2 not found !\n")
             mylogs.error(str(e))
             printlcd("EXCEPTION Lumentree2",str(e))
             sys.exit(1)
 
-        status.LT2_Temperature = int(LT2.readtemp())
-        sleep(0.2)
-        mylogs.debug("LT2 temperature: " + str(status.LT2_Temperature))
-        mylogs.debug("LT2 set output to 0")
-        LT2.set_watt_out(0) #init with 0, force without any function above
-        sleep(0.2)
-        cfg.MaxDisChargeWATT = cfg.MaxDisChargeWATT + cfg.lt2_maxwatt
 
     if (cfg.lt_count > 2):
         try:
             LT3 = lt232(cfg.lt_devtype,cfg.lt3_device,cfg.lt3_address,cfg.loglevel)
             LT3.lt232_open()
+            status.LT3_Temperature = int(LT3.readtemp())
+            sleep(0.2)
+            mylogs.debug("LT3 temperature: " + str(status.LT3_Temperature))
+            mylogs.debug("LT3 set output to 0")
+            LT3.set_watt_out(0) #init with 0 #init with 0, force without any function above
+            sleep(0.2)
+            cfg.MaxDisChargeWATT = cfg.MaxDisChargeWATT + cfg.lt3_maxwatt
         except Exception as e:
             mylogs.error("\n\nLumentree Device 3 not found !\n")
             mylogs.error(str(e))
             printlcd("EXCEPTION Lumentree3",str(e))
             sys.exit(1)
 
-        status.LT3_Temperature = int(LT3.readtemp())
-        sleep(0.2)
-        mylogs.debug("LT3 temperature: " + str(status.LT3_Temperature))
-        mylogs.debug("LT3 set output to 0")
-        LT3.set_watt_out(0) #init with 0 #init with 0, force without any function above
-        sleep(0.2)
-        cfg.MaxDisChargeWATT = cfg.MaxDisChargeWATT + cfg.lt3_maxwatt
-
-    Lumentree_Check() #Get The first voltage needed for later
+    if(cfg.Selected_Device_DisCharger == 1): 
+        Lumentree_Check() #Get The first voltage needed for later if Lumentree is used
     mylogs.info("MaxDisChargeWATT LT_calc.  : " + str(cfg.MaxDisChargeWATT))
 
 #################################################################
@@ -2770,7 +2837,7 @@ if (cfg.Selected_BMS != 0):
 
     if (cfg.Selected_BMS == 100):
         try:
-            UBMS = uni_bms(cfg.BMS_device, 0, cfg.loglevel)
+            UBMS = uni_bms(cfg.BMS_device, cfg.UNIBMSType, cfg.loglevel)
             UBMS.bms_open()
             sleep(0.5)
         except Exception as e:
@@ -2781,17 +2848,16 @@ if (cfg.Selected_BMS != 0):
             sys.exit(1)
 
     sleep(1) #wait until bus is ready
-    GetBMSData()
 
 #Now the Battery hardware should be initilized
 #Read the first battery value to initilize voltage and BMS
 #Just check all sources.
 i = 1
 while(((status.BatteryVoltage == 0) ) and (i<10)): #or (status.BMSSOC == 0)
+    GetBMSData()
     GetChargerVoltage()
     GetDisChargerVoltage()
     GetBatteryVoltage()
-    GetBMSData()
     mylogs.info("Try to get Voltage and BMSSOC ...: " + str(i) + " Voltage: " + str(status.BatteryVoltage/100) + "V - BMSSOC: " + str(status.BMSSOC) + "%")
     i+=1
     sleep(1)
@@ -2799,8 +2865,6 @@ while(((status.BatteryVoltage == 0) ) and (i<10)): #or (status.BMSSOC == 0)
 if(i>=10):
     mylogs.error("ERROR CAN NOT GET BATTERY VOLTAGE AND BMSSOC - STOP")
     sys.exit(1)
-
-
 
 #################################################################
 #################################################################

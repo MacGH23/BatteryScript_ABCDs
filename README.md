@@ -24,6 +24,7 @@ x = 0..3
 * Meanwell NPB-[450/750/1200/1700]-[12/24/48/96] incl. voltage adjust for Chargecurrent < MinCurrent (able to charge below MinCurrent)
 * Constant current based power supply via external power switch <br> IP based power switch supported now: Tasmota, Shelly
 * Simulator, can be used for testing
+* Huawei R48xxGx 48V in development, need a sample, if you have one which you can share please contact me
 
 *Important Note for Meanwell devices !<br>*
 Changing the output values are limited to 4.000.000 by design.<br>

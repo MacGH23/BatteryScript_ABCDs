@@ -14,7 +14,7 @@ import serial
 
 
 # CONSTANTS
-DRIVER_VERSION: str = "1.4.20240824dev"
+DRIVER_VERSION: str = "1.5.20240929dev"
 """
 current version of the driver
 """
@@ -115,34 +115,37 @@ FLOAT_CELL_VOLTAGE: float = float(config["DEFAULT"]["FLOAT_CELL_VOLTAGE"])
 """
 Defines the cell voltage that the battery should have when it is fully charged.
 """
+
 # make some checks for most common missconfigurations
 if FLOAT_CELL_VOLTAGE > MAX_CELL_VOLTAGE:
-    FLOAT_CELL_VOLTAGE = MAX_CELL_VOLTAGE
     errors_in_config.append(
         f"**CONFIG ISSUE**: FLOAT_CELL_VOLTAGE ({FLOAT_CELL_VOLTAGE} V) is greater than MAX_CELL_VOLTAGE ({MAX_CELL_VOLTAGE} V). "
         + "To ensure that the driver still works correctly, FLOAT_CELL_VOLTAGE was set to MAX_CELL_VOLTAGE. Please check the configuration."
     )
+    FLOAT_CELL_VOLTAGE = MAX_CELL_VOLTAGE
+
 # make some checks for most common missconfigurations
 if FLOAT_CELL_VOLTAGE < MIN_CELL_VOLTAGE:
-    FLOAT_CELL_VOLTAGE = MIN_CELL_VOLTAGE
     errors_in_config.append(
         "**CONFIG ISSUE**: FLOAT_CELL_VOLTAGE ({FLOAT_CELL_VOLTAGE} V) is less than MIN_CELL_VOLTAGE ({MIN_CELL_VOLTAGE} V). "
         + "To ensure that the driver still works correctly, FLOAT_CELL_VOLTAGE was set to MIN_CELL_VOLTAGE. Please check the configuration."
     )
+    FLOAT_CELL_VOLTAGE = MIN_CELL_VOLTAGE
 
 SOC_RESET_VOLTAGE: float = float(config["DEFAULT"]["SOC_RESET_VOLTAGE"])
-# make some checks for most common missconfigurations
-if SOC_RESET_VOLTAGE < MAX_CELL_VOLTAGE:
-    SOC_RESET_VOLTAGE = MAX_CELL_VOLTAGE
-    errors_in_config.append(
-        "**CONFIG ISSUE**: SOC_RESET_VOLTAGE ({SOC_RESET_VOLTAGE} V) is less than MAX_CELL_VOLTAGE ({MAX_CELL_VOLTAGE} V). "
-        + "To ensure that the driver still works correctly, SOC_RESET_VOLTAGE was set to MAX_CELL_VOLTAGE. Please check the configuration."
-    )
 SOC_RESET_AFTER_DAYS: int = (
     int(config["DEFAULT"]["SOC_RESET_AFTER_DAYS"])
     if config["DEFAULT"]["SOC_RESET_AFTER_DAYS"] != ""
     else False
 )
+
+# make some checks for most common missconfigurations
+if SOC_RESET_AFTER_DAYS and SOC_RESET_VOLTAGE < MAX_CELL_VOLTAGE:
+    errors_in_config.append(
+        "**CONFIG ISSUE**: SOC_RESET_VOLTAGE ({SOC_RESET_VOLTAGE} V) is less than MAX_CELL_VOLTAGE ({MAX_CELL_VOLTAGE} V). "
+        + "To ensure that the driver still works correctly, SOC_RESET_VOLTAGE was set to MAX_CELL_VOLTAGE. Please check the configuration."
+    )
+    SOC_RESET_VOLTAGE = MAX_CELL_VOLTAGE
 
 # --------- Modbus (multiple BMS on one serial adapter) ---------
 MODBUS_ADDRESSES: list = _get_list_from_config(
@@ -151,6 +154,40 @@ MODBUS_ADDRESSES: list = _get_list_from_config(
 
 # --------- BMS disconnect behaviour ---------
 BLOCK_ON_DISCONNECT: bool = "True" == config["DEFAULT"]["BLOCK_ON_DISCONNECT"]
+BLOCK_ON_DISCONNECT_TIMEOUT_MINUTES: float = float(
+    config["DEFAULT"]["BLOCK_ON_DISCONNECT_TIMEOUT_MINUTES"]
+)
+BLOCK_ON_DISCONNECT_VOLTAGE_MIN: float = float(
+    config["DEFAULT"]["BLOCK_ON_DISCONNECT_VOLTAGE_MIN"]
+)
+BLOCK_ON_DISCONNECT_VOLTAGE_MAX: float = float(
+    config["DEFAULT"]["BLOCK_ON_DISCONNECT_VOLTAGE_MAX"]
+)
+
+# make some checks for most common missconfigurations
+if not BLOCK_ON_DISCONNECT:
+    if BLOCK_ON_DISCONNECT_VOLTAGE_MIN < MIN_CELL_VOLTAGE:
+        errors_in_config.append(
+            f"**CONFIG ISSUE**: BLOCK_ON_DISCONNECT_VOLTAGE_MIN ({BLOCK_ON_DISCONNECT_VOLTAGE_MIN} V) is less than MIN_CELL_VOLTAGE ({MIN_CELL_VOLTAGE} V). "
+            + "To ensure that the driver still works correctly, BLOCK_ON_DISCONNECT_VOLTAGE_MIN was set to MIN_CELL_VOLTAGE. Please check the configuration."
+        )
+        BLOCK_ON_DISCONNECT_VOLTAGE_MIN = MIN_CELL_VOLTAGE
+
+    if BLOCK_ON_DISCONNECT_VOLTAGE_MAX > MAX_CELL_VOLTAGE:
+        errors_in_config.append(
+            f"**CONFIG ISSUE**: BLOCK_ON_DISCONNECT_VOLTAGE_MAX ({BLOCK_ON_DISCONNECT_VOLTAGE_MAX} V) is greater than MAX_CELL_VOLTAGE ({MAX_CELL_VOLTAGE} V). "
+            + "To ensure that the driver still works correctly, BLOCK_ON_DISCONNECT_VOLTAGE_MAX was set to MAX_CELL_VOLTAGE. Please check the configuration."
+        )
+        BLOCK_ON_DISCONNECT_VOLTAGE_MAX = MAX_CELL_VOLTAGE
+
+    if BLOCK_ON_DISCONNECT_VOLTAGE_MIN >= BLOCK_ON_DISCONNECT_VOLTAGE_MAX:
+        errors_in_config.append(
+            f"**CONFIG ISSUE**: BLOCK_ON_DISCONNECT_VOLTAGE_MIN ({BLOCK_ON_DISCONNECT_VOLTAGE_MIN} V) "
+            + f"is greater or equal to BLOCK_ON_DISCONNECT_VOLTAGE_MAX ({BLOCK_ON_DISCONNECT_VOLTAGE_MAX} V). "
+            + "For safety reasons BLOCK_ON_DISCONNECT was set to True. Please check the configuration."
+        )
+        BLOCK_ON_DISCONNECT = True
+
 
 # --------- Charge mode ---------
 LINEAR_LIMITATION_ENABLE: bool = "True" == config["DEFAULT"]["LINEAR_LIMITATION_ENABLE"]
