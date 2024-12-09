@@ -28,7 +28,7 @@ x = 0..3
 
 *Important Note for Meanwell devices !<br>*
 Changing the output values are limited to 4.000.000 by design.<br>
-The NPB has a newer firmware with an additional option to disable the EEPROM write (from 02/2024 - option will be set if available)<br>
+The NPB and BIC2200 has a newer firmware with an additional option to disable the EEPROM write (from 02/2024 - option will be set if available)<br>
 This can only be updated by Meanwell ! <br>
 Therefore several options are available to configure.<br>
 - ZeroDeltaChargerWatt       =    30 (range in WATT without set device to new value)
@@ -126,7 +126,9 @@ Since I forget always the command to attach to the tmux window just call:<br>
 `./ShowBS.sh`<br>
 or<br>
 `./BSstart.py 9`<br>
-To detach, press CTRL+"B" -> release -> Press "D"<br>
+To detach, press CTRL+"b" -> release -> Press "d"<br>
+To scroll inside TMUX, press CTRL+"B" -> release -> Press "Page Up"<br>
+To exit scroll mode press "q" <br>
 
 `Options for BSstart [0..3,9]`<br>
 Default "0" just starts the script,<br>
@@ -256,7 +258,20 @@ If you see problems during init of CAN device, check / add an entry in<br>
 ` sudo nano /etc/hosts`  <br>
 127.0.1.1       [Hostname of your Raspberry] <br>
 - Waveshare CAN RS485 HAT<br>
-For installation see [Waveshare Wiki](https://www.waveshare.com/wiki/RS485_CAN_HAT)
+For installation see [Waveshare Wiki](https://www.waveshare.com/wiki/RS485_CAN_HAT)<br>
+
+Waveshare CAN RS485 HAT Short summery:<br>
+Insert the module into the Raspberry Pi, modify the start-up script "config.txt".
+
+`sudo nano /boot/config.txt`<br>
+or<br>
+`sudo nano /boot/firmware/config.txt`<br>
+
+Add the following content at the file:<br>
+`dtparam=spi=on` <br>
+`dtoverlay=mcp2515-can0,oscillator=12000000,interrupt=25,spimaxfrequency=2000000` <br>
+reboot raspberry<br>
+
 
 **Add new devices:<br>**
 You have to provide the interface to the device. If possible add a class in a subfolder for easier handling:<br>

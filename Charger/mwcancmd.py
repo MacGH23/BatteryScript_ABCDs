@@ -32,7 +32,7 @@ from mwcan import *
 # Config
 # 0 = BIC-2200
 # 1 = NPM-abc0
-USEDMW = 0
+USEDMW = 1
 
 # BIC-2200 --> "00" to "07"
 # NPM-abc0 --> "00" to "03"
