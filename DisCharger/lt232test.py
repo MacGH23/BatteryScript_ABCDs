@@ -16,7 +16,7 @@ import atexit
 from lt232 import *
 
 
-# "" = default = "/dev/ttyUSB00"
+# "" = default = "/dev/ttyUSB0"
 # if you have another device specify here
 #0=Lumentree
 #1=Trucki RS485
@@ -86,14 +86,12 @@ def tempread():
 def setwatt(val):
     # print ("Set output in WATT")
     # Set output in Watt
-    
     v = lt.set_watt_out(val) 
     return v
 
 def readwatt():
     # print ("Set output in WATT")
     # Set output in Watt
-    
     v = lt.read_watt_out() 
     print(v)
     return v

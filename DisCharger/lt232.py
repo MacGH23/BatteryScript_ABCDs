@@ -120,14 +120,24 @@ class lt232:
     def lt232_open(self):
         logging.info("open serial interface")
         try:
-            self.lt232 = minimalmodbus.Instrument(self.devpath, self.idadr) # port name, slave address (in decimal)
+            self.lt232 = minimalmodbus.Instrument(self.devpath, self.idadr, 'rtu', False, (self.loglevel < 20)) # port name, slave address (in decimal), Mode, close_port_after_each_call, debug
         except Exception as e:
-            logging.error("Can not init Lumentree/TruckiRS485 device: " + devpath + " address: " + idadr)
+            logging.error("Can not init Lumentree/TruckiRS485 device: " + self.devpath + " address: " + self.idadr)
             logging.error("If device is correct, check if User is in dialout group !")
             raise Exception("LUMENTREE/TRUCKIRS485 DEVICE NOT FOUND")
 
-        self.lt232.serial.baudrate = 9600   # Baudrate
-        self.lt232.serial.timeout  = 1      # according Spec LT has a 1 Second timeout
+        self.lt232.serial.baudrate       = 9600   # Baudrate
+        self.lt232.serial.timeout        = 0.9      # according Spec LT has a 1 Second timeout
+        self.lt232.serial.write_timeout  = 0.9      # according Spec LT has a 1 Second timeout
+
+        #Can work in some environment better
+        #self.lt232.serial.exclusive      = True      
+        
+        #This Should be all default already
+        #self.lt232.clear_buffers_before_each_transaction = True
+        #self.lt232.serial.bytesize = 8
+        #self.lt232.serial.parity   = minimalmodbus.serial.PARITY_NONE
+        #self.lt232.serial.stopbits = 1
         logging.debug(self.lt232)
 
     def lt232_close(self):
@@ -151,7 +161,7 @@ class lt232:
         logging.debug("lt232_IO: " + str(regnr) + "-" + str(wr) + "-" + str(value))
         if wr == 0: #read
             try:
-                readvalue = self.lt232.read_register(regnr)  # Registernumber (number of decimals)
+                readvalue = self.lt232.read_register(regnr, 0, 3, False)  # Registernumber (number of decimals)
             except Exception as e:
                 logging.error("Exception during read operation !")
                 raise Exception(str(e))
@@ -159,22 +169,23 @@ class lt232:
             return readvalue
             
         if wr == 1: #write
-            #40 = Set output in Watt
+            #SUN:  0 = Set output in Watt
+            #LT : 40 = Set output in Watt
             try:
-                self.lt232.write_register(regnr, value)  # Registernumber, value, number of decimals for storage
+                self.lt232.write_register(regnr, value, 0, 16, False)  # Registernumber, value, number of decimals for storage
             except Exception as e:
                 logging.error("Exception during write operation !")
                 raise Exception(str(e))
                 return -1
-                
             return value
+
 
     #############################################################################
     # Operation function
     
     def set_watt_out(self,val):
         logging.debug("write power out: " + str(val))
-        if(self.devtype == 1): #Trucki RS485
+        if(self.devtype == 1): #Trucki RS485 for SUN
             val = val*10
         self.lt232_IO(self.DEV_Set_Watt,1,val) #does only return 0
         return val  #return the same value to signal OK

@@ -58,11 +58,11 @@ If you want to change the "default" you have to enable write EEPROM again and ch
 Note: Use a wired connection if possible, Bluetooth is not recommended !<br>
 * JKBMS with original JK RS485 interface adapter (dedicated lib)
 * DalyBMS with original Daly UART interface adapter (no Bluetooth, dedicated lib)
-* almost all BMS supported by UNIBMS lib based on [venus-os_dbus-serialbattery](https://github.com/mr-manuel/venus-os_dbus-serialbattery)
+* almost all BMS supported by standalone_serialbattery lib based on [venus-os_dbus-serialbattery](https://github.com/mr-manuel/venus-os_dbus-serialbattery)
 [Supported BMS](https://mr-manuel.github.io/venus-os_dbus-serialbattery_docs/general/supported-bms/)<br>
 Note:<br>
 Currently only one single BMS is supported and not testes with all of the BMS. But should work<br>
-Use bms_test.py in UNIBMS folder to test your BMS
+Use standalone_serialbattery_test in SASB folder to test your BMS
 
 **Power meter information:<br>**
 To adjust everything automatically, you need to get the current power.<br>
@@ -84,7 +84,7 @@ Device / HW | Interface | Recommended
 ---|---|---|
 Meanwell | CAN | [Waveshare RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) or [Fischl USBTin](https://www.fischl.de/usbtin/)<br> ![Waveshare RS485CAN](/pictures/wavesharers485can.jpg "Waveshare RS485CAN")   ![Fischl USBTin](/pictures/usbtin.jpg "Fischl USBTin")
 Lumentree | RS232 | Any simple USB to RS232 adapter<br> ![USB RS232](/pictures/usbrs232.jpg "USB RS232") or ![USB RS232](/pictures/RS232_USB2.jpg "USB RS232") <br> See Lumentree installation hints 
-JKBMS | RS485 | [Waveshare RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) with original JKRS485 adapter<br> ![JKBms RS485](/pictures/jkbms_rs485.jpg "JKBms RS485")
+JKBMS | RS485 | [Waveshare RS485 CAN HAT](https://www.waveshare.com/rs485-can-hat.htm) with original JKRS485 adapter or simple USB-RS485 adapter<br> ![JKBms RS485](/pictures/jkbms_rs485.jpg "JKBms RS485")
 DALYBMS | UART | Original DALY UART USB adapter<br> ![DALYBms UART RS485](/pictures/dalybms_uart.jpg "JKBms RS485")
 
 
@@ -97,7 +97,7 @@ Easiest methode to connect is a simple USB to RS232 adapter.<br>
 But see also Lumentree installation hints, because of Pin 9! <br>
 
 JKBMS is optional. You have to use the original JK RS485 adapter and connect it to a RS485 interface at the Raspberry. <br>
-Use the Waveshare CAN/RS485 HAT. Especially if you also use a CAN device.
+Use the Waveshare CAN/RS485 HAT. Especially if you also use a CAN device or simples USB-RS485 adapter.
 
 MQTT publish:<br>
 You can publish some data form the script to the mqtt server.<br>
@@ -197,6 +197,7 @@ Install Tmux<br>
 
 For the serial communication with Lumentree and BMS the user must be added to dialout group<br>
 `sudo usermod -a -G tty $USER`<br>
+`sudo usermod -a -G dialout $USER`<br>
 
 **Lumentree installation hints:<br>**
 - Disable ModemManager to prevent scanning COM ports<br>
@@ -287,5 +288,5 @@ https://github.com/stcan/meanwell-can-control for first idea for this script<br>
 https://github.com/reserve85/HoymilesZeroExport where I take the code for the http meter request<br>
 https://github.com/fah/jk-bms for the JKBMS interface<br>
 https://github.com/dreadnought/python-daly-bms for Daly BMS interface<br>
-https://github.com/mr-manuel/venus-os_dbus-serialbattery for base of UNIBMS BMS interface<br>
+https://github.com/mr-manuel/venus-os_dbus-serialbattery for base of standalone-serialbattery BMS interface<br>
 

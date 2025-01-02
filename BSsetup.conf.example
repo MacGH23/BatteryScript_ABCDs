@@ -85,9 +85,8 @@ WSipadr =
 # Software  = 1 #not fully implemented 
 # JKBMS     = 2
 # DalyBMS   = 3
-# UNIBMS    = 100 #Universal BMS lib based on https://github.com/mr-manuel/venus-os_dbus-serialbattery
-#                 uses autodetect or BMS list in /UNIBMS/config.ini !
-#                 Check /UNIBMS/config.ini for paramter you have to enter there
+# SASBBMS   = 100 #Standalone BMS lib based on https://github.com/mr-manuel/venus-os_dbus-serialbattery
+#                 uses autodetect or BMS list in /SASB/config.default.ini !
 #                 BMS_TYPE =        #enter your BMS there for a faster connect and disable autodetect   
 #                 CAN_PORT =        #if you use can as interface
 #                 BLUETOOTH_BMS =   #for bluetooth connection
@@ -99,7 +98,10 @@ Selected_BMS = 0
 # 1: JKBMS bluetooth
 # 2: JBDBMS bluetooth
 # 3: JKBMS / DALY can
-UNIBMSType   = 0
+SASBBMSType   = 0
+
+#Address for CAN and Bluetooth as string
+SASBBMSAdr    = ""
 
 #BMS Device
 # e.g.
@@ -168,6 +170,7 @@ PowerControlmethod = 1
 # BIC-2200      = 0
 # NPM-abc0      = 1
 # ConstantBased = 2   (constant charger only to switch on/off with e.g. external switch)
+# notreleased   = 10  (Demo unit)
 # Simulator     = 255 (only show the value)
 Selected_Device_Charger = 255
 
@@ -384,6 +387,22 @@ lt2_maxwatt = 0
 lt3_device  = 
 lt3_address = 1
 lt3_maxwatt = 0
+
+##########################################################################
+# DEMO parameters ###################
+##########################################################################
+#How much Demo devices you have installed. Max is 3
+#If parallel mode with multible devices, mm1_nodeid, mm2, mm3, mm4 needs to be in ascending order !
+#mm_interface: 0=can, 1= rs485/modbus
+mm_device  = 
+mm_interface  = 1
+mm_count   = 0
+mm1_nodeid = -1
+mm2_nodeid = -1
+mm3_nodeid = -1
+mm4_nodeid = -1
+mm_ChargeVoltCorr = 0
+mm_VoltageAdjust  = 0
 
 ##########################################################################
 # Soyo 1000W/1200W        ################################################
