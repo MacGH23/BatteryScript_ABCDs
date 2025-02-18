@@ -70,6 +70,7 @@
 # macGH 22.11.2024  Version 0.4.7: Added Demo charger
 # macGH 09.12.2024  Version 0.4.8: Fixed BIC2200 Battery empty start
 # macGH 30.12.2024  Version 0.4.9: Added Demo RS485 interface
+# macGH 10.01.2025  Version 0.5.0: Added mqtt publish EstWh
 
 import os
 import sys
@@ -749,6 +750,7 @@ class chargerconfig:
             self.mqttpass = updater["Setup"]["mqttpass"].value
             self.mqttsubscribe = updater["Setup"]["mqttsubscribe"].value
             self.mqttpublish = int(updater["Setup"]["mqttpublish"].value)
+            self.mqttpublishBatWh = updater["Setup"]["mqttpublishBatWh"].value
             self.mqttpublishWATT = updater["Setup"]["mqttpublishWATT"].value
             self.mqttpublishSOC = updater["Setup"]["mqttpublishSOC"].value
             self.mqttpublishBatVolt = updater["Setup"]["mqttpublishBatVolt"].value
@@ -1274,6 +1276,8 @@ def mqttpublish(cleanup=0):
 
         if cfg.mqttpublishWATT != "":
             dev.mqttclient.publish(cfg.mqttpublishWATT, payload=lwatt, qos=1, retain=True)
+        if cfg.mqttpublishBatWh != "":
+            dev.mqttclient.publish(cfg.mqttpublishBatWh, payload=round(status.EstBatteryWh / 1000), qos=1, retain=True)
         if cfg.mqttpublishSOC != "":
             dev.mqttclient.publish(cfg.mqttpublishSOC, payload=status.BMSSOC, qos=1, retain=True)
         if cfg.mqttpublishBatVolt != "":

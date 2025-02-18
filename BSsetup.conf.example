@@ -250,6 +250,7 @@ mqttsubscribe = 0_userdata.0.CurrentPower
 #mqttPublish value to broker
 mqttpublish         = 0
 #empty string = do not use
+mqttpublishBatWh    = Battery/Status/BatWh
 mqttpublishWATT     = Battery/Status/Watt
 mqttpublishSOC      = Battery/Status/BatterySOC
 mqttpublishBatVolt  = Battery/Status/BatteryVoltage

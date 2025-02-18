@@ -254,14 +254,14 @@ Run the script (after configuration of cource).<br>
 DALY BMS needs quite long to answer, use min. 2 seconds for meter update<br>
 
 
-**CAN devices hints:<br>**
+**CAN/RS485 devices hints:<br>**
 If you see problems during init of CAN device, check / add an entry in<br>
 ` sudo nano /etc/hosts`  <br>
 127.0.1.1       [Hostname of your Raspberry] <br>
 - Waveshare CAN RS485 HAT<br>
 For installation see [Waveshare Wiki](https://www.waveshare.com/wiki/RS485_CAN_HAT)<br>
 
-Waveshare CAN RS485 HAT Short summery:<br>
+**Waveshare CAN RS485 HAT Short summery:**<br>
 Insert the module into the Raspberry Pi, modify the start-up script "config.txt".
 
 `sudo nano /boot/config.txt`<br>
@@ -271,6 +271,13 @@ or<br>
 Add the following content at the file:<br>
 `dtparam=spi=on` <br>
 `dtoverlay=mcp2515-can0,oscillator=12000000,interrupt=25,spimaxfrequency=2000000` <br>
+reboot raspberry<br><br>
+If you have problems with RS485 and waveshare HAT, check if console outout is set to serial in cmdline.txt<br>
+`sudo nano /boot/firmware/cmdline.txt`<br>
+Change<br>
+`console=serial0,115200 console=tty1 [...]`<br>
+to<br>
+ `console=tty1 [...]`<br>
 reboot raspberry<br>
 
 
