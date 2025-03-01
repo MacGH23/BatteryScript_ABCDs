@@ -390,20 +390,20 @@ lt3_address = 1
 lt3_maxwatt = 0
 
 ##########################################################################
-# DEMO parameters ###################
+# mPSU parameters ###################
 ##########################################################################
-#How much Demo devices you have installed. Max is 3
-#If parallel mode with multible devices, mm1_nodeid, mm2, mm3, mm4 needs to be in ascending order !
-#mm_interface: 0=can, 1= rs485/modbus
-mm_device  = 
-mm_interface  = 1
-mm_count   = 0
-mm1_nodeid = -1
-mm2_nodeid = -1
-mm3_nodeid = -1
-mm4_nodeid = -1
-mm_ChargeVoltCorr = 0
-mm_VoltageAdjust  = 0
+#How much devices you have installed. Max is 4
+#If parallel mode with multible devices, mPSU1_nodeid, mPSU2, mPSU3, mPSU4 needs to be in ascending order !
+#mPSU_interface: 0=can, 1= rs485/modbus
+mPSU_device  = 
+mPSU_interface  = 1
+mPSU_count   = 1
+mPSU1_nodeid = 1
+mPSU2_nodeid = -1
+mPSU3_nodeid = -1
+mPSU4_nodeid = -1
+mPSU_ChargeVoltCorr = 0
+mPSU_VoltageAdjust  = 0
 
 ##########################################################################
 # Soyo 1000W/1200W        ################################################

@@ -67,9 +67,9 @@
 # macGH 07.11.2024  Version 0.4.4: Update BIC2200 almost empty
 # macGH 09.11.2024  Version 0.4.5: Added ProcessActive to prevent 2nd start before all was proceed
 # macGH 09.11.2024  Version 0.4.6: Fixed BIC2200 always on Battery almost full issue (fast switch charge <> discharge)
-# macGH 22.11.2024  Version 0.4.7: Added Demo charger
+# macGH 22.11.2024  Version 0.4.7: Added mPSU CAN
 # macGH 09.12.2024  Version 0.4.8: Fixed BIC2200 Battery empty start
-# macGH 30.12.2024  Version 0.4.9: Added Demo RS485 interface
+# macGH 30.12.2024  Version 0.4.9: Added mPSU RS485 interface
 # macGH 10.01.2025  Version 0.5.0: Added mqtt publish EstWh
 
 import os
@@ -100,7 +100,7 @@ from Meter.meter import *
 from Charger.constbased import *
 
 # import external funtions
-from BatterScript_external import *
+from BatteryScript_external import *
 
 # LCD import
 from LCD.hd44780_i2c import i2clcd
@@ -114,9 +114,9 @@ from daly_bms_lib import *
 sys.path.insert(1, padd + "/SASB")  # the type of path is string
 from standalone_serialbattery import *
 
-if os.path.isfile(padd + "/Charger/mm_can.py"):
-    from Charger.mm_can import *
-    from Charger.mm_rs485 import *
+if os.path.isfile(padd + "/Charger/mPSU_can.py"):
+    from Charger.mPSU_can import *
+    from Charger.mPSU_rs485 import *
 
 
 #######################################################################
@@ -486,7 +486,7 @@ class DEV:
     def __init__(self):
         self.display = None
         self.mwcandev = None
-        self.mm = None
+        self.mPSU = None
         self.LT1 = None
         self.LT2 = None
         self.LT3 = None
@@ -566,8 +566,8 @@ class Devicestatus:
         self.MW_EEPromOff = 0
         self.MW_BIC_Temperature = 0
         self.MW_ChargeVoltage = 0
-        self.MM_ChargeVoltage = 0
-        self.MM_Temperature = 0
+        self.mPSU_ChargeVoltage = 0
+        self.mPSU_Temperature = 0
         self.ltcounter = 0
         self.ext_lastwattusedindevice = 0  # if User add another external dis-/charger, this can be set for calculation
         self.ext_info = 0
@@ -697,15 +697,15 @@ class chargerconfig:
             self.CBC_pass = updater["Setup"]["CBC_pass"].value
             self.CBC_wattdelta = int(updater["Setup"]["CBC_wattdelta"].value)
 
-            self.mm_device = updater["Setup"]["mm_device"].value
-            self.mm_interface = int(updater["Setup"]["mm_interface"].value)
-            self.mm_count = int(updater["Setup"]["mm_count"].value)
-            self.mm1_nodeid = int(updater["Setup"]["mm1_nodeid"].value)
-            self.mm2_nodeid = int(updater["Setup"]["mm2_nodeid"].value)
-            self.mm3_nodeid = int(updater["Setup"]["mm3_nodeid"].value)
-            self.mm4_nodeid = int(updater["Setup"]["mm4_nodeid"].value)
-            self.mm_ChargeVoltCorr = int(updater["Setup"]["mm_ChargeVoltCorr"].value)
-            self.mm_VoltageAdjust = int(updater["Setup"]["mm_VoltageAdjust"].value)
+            self.mPSU_device = updater["Setup"]["mPSU_device"].value
+            self.mPSU_interface = int(updater["Setup"]["mPSU_interface"].value)
+            self.mPSU_count = int(updater["Setup"]["mPSU_count"].value)
+            self.mPSU1_nodeid = int(updater["Setup"]["mPSU1_nodeid"].value)
+            self.mPSU2_nodeid = int(updater["Setup"]["mPSU2_nodeid"].value)
+            self.mPSU3_nodeid = int(updater["Setup"]["mPSU3_nodeid"].value)
+            self.mPSU4_nodeid = int(updater["Setup"]["mPSU4_nodeid"].value)
+            self.mPSU_ChargeVoltCorr = int(updater["Setup"]["mPSU_ChargeVoltCorr"].value)
+            self.mPSU_VoltageAdjust = int(updater["Setup"]["mPSU_VoltageAdjust"].value)
 
             self.MeterStopOnConnectionLost = int(updater["Setup"]["MeterStopOnConnectionLost"].value)
             self.GetPowerOption = int(updater["Setup"]["GetPowerOption"].value)
@@ -867,15 +867,15 @@ class chargerconfig:
             mylogs.info("MW_BIC2200_efficacy_factor  " + str(self.MW_BIC2200_efficacy_factor))
             mylogs.info("MW_NPB_MaxTemp:             " + str(self.MW_NPB_MaxTemp))
 
-            mylogs.info("-- MM --                    ")
-            mylogs.info("mm_device:                  " + self.mm_device)
-            mylogs.info("mm_count:                   " + str(self.mm_count))
-            mylogs.info("mm1_nodeid:                 " + str(self.mm1_nodeid))
-            mylogs.info("mm2_nodeid:                 " + str(self.mm2_nodeid))
-            mylogs.info("mm3_nodeid:                 " + str(self.mm3_nodeid))
-            mylogs.info("mm4_nodeid:                 " + str(self.mm4_nodeid))
-            mylogs.info("mm_ChargeVoltCorr:          " + str(self.mm_ChargeVoltCorr))
-            mylogs.info("mm_VoltageAdjust:           " + str(self.mm_VoltageAdjust))
+            mylogs.info("-- mPSU --                    ")
+            mylogs.info("mPSU_device:                  " + self.mPSU_device)
+            mylogs.info("mPSU_count:                   " + str(self.mPSU_count))
+            mylogs.info("mPSU1_nodeid:                 " + str(self.mPSU1_nodeid))
+            mylogs.info("mPSU2_nodeid:                 " + str(self.mPSU2_nodeid))
+            mylogs.info("mPSU3_nodeid:                 " + str(self.mPSU3_nodeid))
+            mylogs.info("mPSU4_nodeid:                 " + str(self.mPSU4_nodeid))
+            mylogs.info("mPSU_ChargeVoltCorr:          " + str(self.mPSU_ChargeVoltCorr))
+            mylogs.info("mPSU_VoltageAdjust:           " + str(self.mPSU_VoltageAdjust))
 
             mylogs.info("-- Lumentree --             ")
             mylogs.info("Lumentree efficacy_factor   " + str(self.lt_efficacy_factor))
@@ -1039,13 +1039,13 @@ def on_exit():
                 mylogs.error("ON EXIT EXCEPTION at MWCANDEV")
                 mylogs.error(str(e))
 
-        if dev.mm != None:
+        if dev.mPSU != None:
             try:
                 mylogs.info("CLEAN UP: Shutdown DEMO DEVICE")
                 mylogs.info("Close device")
-                dev.mm.network_stop()  # close the bus
+                dev.mPSU.network_stop()  # close the bus
             except Exception as e:
-                mylogs.error("ON EXIT EXCEPTION at MM")
+                mylogs.error("ON EXIT EXCEPTION at mPSU")
                 mylogs.error(str(e))
 
 
@@ -1442,6 +1442,8 @@ def GetBMSData():
 #####################################################################
 # Setup Operation mode of charger
 def StartStopOperationCharger(val, force=0):
+    global status
+
     mylogs.verbose("StartStopOperationCharger entry: " + str(val) + " Force: " + str(force))
 
     if status.ChargerEnabled == 0:
@@ -1525,7 +1527,7 @@ def StartStopOperationCharger(val, force=0):
                     status.ZeroImportWatt = cfg.ZeroDeltaChargerWATT
                 mylogs.info("ZEROImport: Meter: " + str(val) + " -> ZeroWatt: " + str(Newval) + " (Delta: " + str(cfg.ZeroDeltaChargerWATT) + ")")
 
-    # status = bs_ext.ext_charger_set(Newval, force, dev, cfg, status)
+    status = bs_ext.ext_charger_set(Newval, force, dev, cfg, status)
 
     if cfg.Selected_Device_Charger <= 1:  # BIC and NPB-abc0
         # try to set the new ChargeCurrent if possible
@@ -1552,6 +1554,8 @@ def StartStopOperationCharger(val, force=0):
 
 
 def StartStopOperationDisCharger(val, force=0):
+    global status
+
     mylogs.verbose("StartStopOperationDisCharger entry: " + str(val) + " Force: " + str(force))
 
     if status.DisChargerEnabled == 0:
@@ -1654,7 +1658,7 @@ def StartStopOperationDisCharger(val, force=0):
                     status.ZeroExportWatt = cfg.ZeroDeltaDisChargeWATT
                     mylogs.info("ZEROExport: Meter: " + str(val) + " -> ZeroWatt: " + str(Newval) + " (Delta: " + str(cfg.ZeroDeltaDisChargeWATT) + ")")
 
-    # status = bs_ext.ext_discharger_set(Newval, force, dev, cfg, status)
+    status = bs_ext.ext_discharger_set(Newval, force, dev, cfg, status)
 
     # Which Device used
     mylogs.debug("StartStopOperationDisCharger: " + str(Newval))
@@ -1750,7 +1754,7 @@ def StartStopOperationDevice(val, CD, force=0):
                 return 1
 
         if cfg.Selected_Device_Charger == 10:  # Demo
-            opmode = dev.mm.operation(0, 0, cfg.mm1_nodeid)
+            opmode = dev.mPSU.operation(0, 0, cfg.mPSU1_nodeid)
 
         mylogs.debug("StartStopOperationDevice: Operation mode: " + str(opmode))
         if val == 0:  # set to OFF
@@ -1762,7 +1766,7 @@ def StartStopOperationDevice(val, CD, force=0):
                     MW_EEPROM_Counter_INC(CD)
 
                 if cfg.Selected_Device_Charger == 10:  # Demo
-                    opmode = dev.mm.operation(1, 0, cfg.mm1_nodeid)
+                    opmode = dev.mPSU.operation(1, 0, cfg.mPSU1_nodeid)
 
                 sleep(0.2)
             else:
@@ -1776,7 +1780,7 @@ def StartStopOperationDevice(val, CD, force=0):
                     MW_EEPROM_Counter_INC(CD)
 
                 if cfg.Selected_Device_Charger == 10:  # Demo
-                    opmode = dev.mm.operation(1, 1, cfg.mm1_nodeid)
+                    opmode = dev.mPSU.operation(1, 1, cfg.mPSU1_nodeid)
 
                 sleep(0.2)
             else:
@@ -1824,14 +1828,14 @@ def Charger_Voltage_controller(newCout):
 
     elif cfg.Selected_Device_Charger == 10:  # DEMO
         mylogs.debug("Charger_Voltage_controller - Proceed")
-        if cfg.MM_VoltageAdjust == 0:
+        if cfg.mPSU_VoltageAdjust == 0:
             mylogs.verbose("Charger_Voltage_controller - DISABLED for DEMO")
             return -1
 
-        rval = dev.mm.voltage_out_rw(0, 0, cfg.mm1_nodeid)
+        rval = dev.mPSU.voltage_out_rw(0, 0, cfg.mPSU1_nodeid)
         sleep(0.1)
 
-        defaultvoltage = status.MM_ChargeVoltage
+        defaultvoltage = status.mPSU_ChargeVoltage
 
     else:
         mylogs.verbose("Charger_Voltage_controller - Only for selected Chargers")
@@ -1873,8 +1877,8 @@ def Charger_Voltage_controller(newCout):
             return 1
 
         if cfg.Selected_Device_Charger == 10:  # DEMO
-            mylogs.debug("Charger_Voltage_controller - NEW SET Voltage to MM: " + str(NewVoltage))
-            dev.mm.voltage_out_rw(1, NewVoltage, cfg.mm1_nodeid)
+            mylogs.debug("Charger_Voltage_controller - NEW SET Voltage to mPSU: " + str(NewVoltage))
+            dev.mPSU.voltage_out_rw(1, NewVoltage, cfg.mPSU1_nodeid)
             return 1
     else:
         mylogs.verbose("Charger_Voltage_controller - Already SET Voltage to: " + str(NewVoltage))
@@ -1889,8 +1893,8 @@ def Charger_Device_Set(val, force=0):
                 return
 
         if cfg.Selected_Device_Charger == 10:  # Demo
-            if dev.mm == None:
-                mylogs.error("Charger_Device_Set mm not exists")
+            if dev.mPSU == None:
+                mylogs.error("Charger_Device_Set mPSU not exists")
                 return
 
         mylogs.verbose("Charger_Device_Set entry - value: " + str(val) + " Force: " + str(force))
@@ -1916,7 +1920,7 @@ def Charger_Device_Set(val, force=0):
             vout = dev.mwcandev.v_out_read()
 
         if cfg.Selected_Device_Charger == 10:  # Demo
-            vout = dev.mm.voltage_read(cfg.mm1_nodeid)
+            vout = dev.mPSU.voltage_read(cfg.mPSU1_nodeid)
 
         sleep(0.05)
         status.ChargerVoltage = vout
@@ -1983,7 +1987,7 @@ def Charger_Device_Set(val, force=0):
                             MW_EEPROM_Counter_INC(0)
 
                         if cfg.Selected_Device_Charger == 10:  # Demo
-                            c = dev.mm.current_out_rw(1, IntCurrent, cfg.mm1_nodeid)
+                            c = dev.mPSU.current_out_rw(1, IntCurrent, cfg.mPSU1_nodeid)
 
                         status.LastChargerSetCurrent = IntCurrent
                         OPStart = True  # device start or continue
@@ -2024,7 +2028,7 @@ def Charger_Device_Set(val, force=0):
             status.LastChargerGetCurrent = dev.mwcandev.i_out_read()
 
         if cfg.Selected_Device_Charger == 10:  # Demo
-            status.LastChargerGetCurrent = dev.mm.current_read(cfg.mm1_nodeid)
+            status.LastChargerGetCurrent = dev.mPSU.current_read(cfg.mPSU1_nodeid)
 
         NewVal = int((status.LastChargerGetCurrent * vout) / 10000)
         mylogs.info(
@@ -2442,7 +2446,7 @@ def GetChargerVoltage():
             status.ChargerVoltage = dev.mwcandev.v_out_read()
 
         if cfg.Selected_Device_Charger == 10:  # Demo
-            status.ChargerVoltage = dev.mm.voltage_read(cfg.mm1_nodeid)
+            status.ChargerVoltage = dev.mPSU.voltage_read(cfg.mPSU1_nodeid)
 
     except Exception as e:
         if dev.mwcandev != None:
@@ -2516,9 +2520,9 @@ def CheckTemperatures():
                 mylogs.error("CheckTemperatures: MW_NPB_Temperature Temperature too high")
 
         if cfg.Selected_Device_Charger == 10:
-            status.MM_Temperature = round(int(dev.mm.readtemp(cfg.mm1_nodeid)) / 10)  # need only 2 digits
-            if status.MM_Temperature > 60:  # cfg.MM_MaxTemp):
-                mylogs.error("CheckTemperatures: MM_Temperature Temperature too high")
+            status.mPSU_Temperature = round(int(dev.mPSU.readtemp(cfg.mPSU1_nodeid)) / 10)  # need only 2 digits
+            if status.mPSU_Temperature > 60:  # cfg.mPSU_MaxTemp):
+                mylogs.error("CheckTemperatures: mPSU_Temperature Temperature too high")
 
         if cfg.Selected_Device_DisCharger == 1:
             if status.LT1_Temperature > cfg.lt_MaxTemp:
@@ -3183,53 +3187,53 @@ if cfg.Selected_Device_Charger == 2:
 # Init Demo Charger
 if cfg.Selected_Device_Charger == 10:
     try:
-        if cfg.mm_interface == 0:
-            dev.mm = mm_can(cfg.mm_device, cfg.loglevel)
-            dev.mm.network_start()
+        if cfg.mPSU_interface == 0:
+            dev.mPSU = mPSUcan(cfg.mPSU_device, cfg.loglevel)
+            dev.mPSU.network_start()
         else:
-            dev.mm = mm_rs485(0, cfg.mm_device,cfg.loglevel)
+            dev.mPSU = mPSUrs485(0, cfg.mPSU_device,cfg.loglevel)
 
 
-        for x in range(cfg.mm_count):
-            if x == 0: n = cfg.mm1_nodeid
-            if x == 1: n = cfg.mm2_nodeid
-            if x == 2: n = cfg.mm3_nodeid
-            if x == 3: n = cfg.mm4_nodeid
+        for x in range(cfg.mPSU_count):
+            if x == 0: n = cfg.mPSU1_nodeid
+            if x == 1: n = cfg.mPSU2_nodeid
+            if x == 2: n = cfg.mPSU3_nodeid
+            if x == 3: n = cfg.mPSU4_nodeid
 
-            dev.mm.node_add(n)
-            mylogs.info("FOUND DEVICE: " + dev.mm.devices[n].devname)
+            dev.mPSU.node_add(n)
+            mylogs.info("FOUND DEVICE: " + dev.mPSU.devices[n].devname)
             # Turn device off
             mylogs.info("SET DEVICE OFF")
-            dev.mm.operation(1, 0, n)
+            dev.mPSU.operation(1, 0, n)
 
             # check autostart
-            rval = dev.mm.autostart(0, 0, n)
+            rval = dev.mPSU.autostart(0, 0, n)
             if rval == 1:
                 mylogs.info("DISABLE AUTOSTART: " + str(rval))
-                dev.mm.autostart(1, 0, n)
+                dev.mPSU.autostart(1, 0, n)
 
             # Check parallel mode
-            rval = dev.mm.psu_connect_mode(0, 0, n)
-            if cfg.mm_count == 1:
+            rval = dev.mPSU.psu_connect_mode(0, 0, n)
+            if cfg.mPSU_count == 1:
                 if rval != 0:
                     mylogs.info("SET DEVICE TO STANDALONE MODE")
-                    rval = dev.mm.psu_connect_mode(1, 0, n)
+                    rval = dev.mPSU.psu_connect_mode(1, 0, n)
             else:
                 if rval != 1:
                     mylogs.info("SET DEVICE TO PARALLEL MODE")
-                    rval = dev.mm.psu_connect_mode(1, 1, n)
+                    rval = dev.mPSU.psu_connect_mode(1, 1, n)
 
-        rval = dev.mm.voltage_out_rw(0, 0, cfg.mm1_nodeid)
-        status.MM_ChargeVoltage = cfg.FixedChargeVoltage + cfg.MM_ChargeVoltCorr
-        if rval != status.MM_ChargeVoltage:
-            rval = dev.mm.voltage_out_rw(1, status.MM_ChargeVoltage, cfg.mm1_nodeid)
+        rval = dev.mPSU.voltage_out_rw(0, 0, cfg.mPSU1_nodeid)
+        status.mPSU_ChargeVoltage = cfg.FixedChargeVoltage + cfg.mPSU_ChargeVoltCorr
+        if rval != status.mPSU_ChargeVoltage:
+            rval = dev.mPSU.voltage_out_rw(1, status.mPSU_ChargeVoltage, cfg.mPSU1_nodeid)
             mylogs.info("SET CHARGE VOLTAGE: " + str(rval))
         else:
             mylogs.info("CHARGE VOLTAGE ALREADY SET: " + str(rval))
 
     except Exception as e:
-        dev.mm.network_stop()  # Exception -> close the bus
-        dev.mm = None
+        dev.mPSU.network_stop()  # Exception -> close the bus
+        dev.mPSU = None
         mylogs.error("\n\nEXCEPTION DEMO Device not found !\n")
         mylogs.error(str(e))
         sys.exit(1)
