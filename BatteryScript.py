@@ -1041,7 +1041,7 @@ def on_exit():
 
         if dev.mPSU != None:
             try:
-                mylogs.info("CLEAN UP: Shutdown DEMO DEVICE")
+                mylogs.info("CLEAN UP: Shutdown mPSU DEVICE")
                 mylogs.info("Close device")
                 dev.mPSU.network_stop()  # close the bus
             except Exception as e:
@@ -1539,7 +1539,7 @@ def StartStopOperationCharger(val, force=0):
         Const_Based_Charger_Set(Newval, force)
         return
 
-    if cfg.Selected_Device_Charger == 10:  # Demounit
+    if cfg.Selected_Device_Charger == 10:  # mPSU
         Charger_Device_Set(Newval, force)
         return
 
@@ -1740,7 +1740,7 @@ def Const_Based_Charger_Set(val, force):
 #####################################################################
 #####################################################################
 #####################################################################
-# Operation ON/OFF of devices Meanwell / Demo
+# Operation ON/OFF of devices Meanwell / mPSU
 def StartStopOperationDevice(val, CD, force=0):
     try:
         mylogs.verbose("StartStopOperationDevice entry - value: " + str(val) + " Force: " + str(force))
@@ -1753,7 +1753,7 @@ def StartStopOperationDevice(val, CD, force=0):
                 mylogs.verbose("StartStopOperationDevice: BIC ALWAYS ON - nothing to do")
                 return 1
 
-        if cfg.Selected_Device_Charger == 10:  # Demo
+        if cfg.Selected_Device_Charger == 10:  # mPSU
             opmode = dev.mPSU.operation(0, 0, cfg.mPSU1_nodeid)
 
         mylogs.debug("StartStopOperationDevice: Operation mode: " + str(opmode))
@@ -1765,7 +1765,7 @@ def StartStopOperationDevice(val, CD, force=0):
                     mylogs.verbose("Meanwell: Operation mode set to: OFF")
                     MW_EEPROM_Counter_INC(CD)
 
-                if cfg.Selected_Device_Charger == 10:  # Demo
+                if cfg.Selected_Device_Charger == 10:  # mPSU
                     opmode = dev.mPSU.operation(1, 0, cfg.mPSU1_nodeid)
 
                 sleep(0.2)
@@ -1779,7 +1779,7 @@ def StartStopOperationDevice(val, CD, force=0):
                     mylogs.verbose("Meanwell: Operation mode set to: ON")
                     MW_EEPROM_Counter_INC(CD)
 
-                if cfg.Selected_Device_Charger == 10:  # Demo
+                if cfg.Selected_Device_Charger == 10:  # mPSU
                     opmode = dev.mPSU.operation(1, 1, cfg.mPSU1_nodeid)
 
                 sleep(0.2)
@@ -1826,10 +1826,10 @@ def Charger_Voltage_controller(newCout):
 
         defaultvoltage = status.MW_ChargeVoltage
 
-    elif cfg.Selected_Device_Charger == 10:  # DEMO
+    elif cfg.Selected_Device_Charger == 10:  # mPSU
         mylogs.debug("Charger_Voltage_controller - Proceed")
         if cfg.mPSU_VoltageAdjust == 0:
-            mylogs.verbose("Charger_Voltage_controller - DISABLED for DEMO")
+            mylogs.verbose("Charger_Voltage_controller - DISABLED for mPSU")
             return -1
 
         rval = dev.mPSU.voltage_out_rw(0, 0, cfg.mPSU1_nodeid)
@@ -1876,7 +1876,7 @@ def Charger_Voltage_controller(newCout):
             MW_EEPROM_Counter_INC(1)
             return 1
 
-        if cfg.Selected_Device_Charger == 10:  # DEMO
+        if cfg.Selected_Device_Charger == 10:  # mPSU
             mylogs.debug("Charger_Voltage_controller - NEW SET Voltage to mPSU: " + str(NewVoltage))
             dev.mPSU.voltage_out_rw(1, NewVoltage, cfg.mPSU1_nodeid)
             return 1
@@ -1892,7 +1892,7 @@ def Charger_Device_Set(val, force=0):
                 mylogs.error("Charger_Device_Set mwcandev not exists")
                 return
 
-        if cfg.Selected_Device_Charger == 10:  # Demo
+        if cfg.Selected_Device_Charger == 10:  # mPSU
             if dev.mPSU == None:
                 mylogs.error("Charger_Device_Set mPSU not exists")
                 return
@@ -1919,7 +1919,7 @@ def Charger_Device_Set(val, force=0):
         if cfg.Selected_Device_Charger <= 1:  # BIC NPB
             vout = dev.mwcandev.v_out_read()
 
-        if cfg.Selected_Device_Charger == 10:  # Demo
+        if cfg.Selected_Device_Charger == 10:  # mPSU
             vout = dev.mPSU.voltage_read(cfg.mPSU1_nodeid)
 
         sleep(0.05)
@@ -1986,7 +1986,7 @@ def Charger_Device_Set(val, force=0):
                             c = dev.mwcandev.i_out_set(1, IntCurrent)
                             MW_EEPROM_Counter_INC(0)
 
-                        if cfg.Selected_Device_Charger == 10:  # Demo
+                        if cfg.Selected_Device_Charger == 10:  # mPSU
                             c = dev.mPSU.current_out_rw(1, IntCurrent, cfg.mPSU1_nodeid)
 
                         status.LastChargerSetCurrent = IntCurrent
@@ -2027,7 +2027,7 @@ def Charger_Device_Set(val, force=0):
         if cfg.Selected_Device_Charger <= 1:  # BIC NPB
             status.LastChargerGetCurrent = dev.mwcandev.i_out_read()
 
-        if cfg.Selected_Device_Charger == 10:  # Demo
+        if cfg.Selected_Device_Charger == 10:  # mPSU
             status.LastChargerGetCurrent = dev.mPSU.current_read(cfg.mPSU1_nodeid)
 
         NewVal = int((status.LastChargerGetCurrent * vout) / 10000)
@@ -2445,7 +2445,7 @@ def GetChargerVoltage():
         if cfg.Selected_Device_Charger <= 1:  # BIC and NPB-abc0
             status.ChargerVoltage = dev.mwcandev.v_out_read()
 
-        if cfg.Selected_Device_Charger == 10:  # Demo
+        if cfg.Selected_Device_Charger == 10:  # mPSU
             status.ChargerVoltage = dev.mPSU.voltage_read(cfg.mPSU1_nodeid)
 
     except Exception as e:
@@ -3184,7 +3184,7 @@ if cfg.Selected_Device_Charger == 2:
     cbc.PowerOff()
     status.ChargerStatus = 0
 
-# Init Demo Charger
+# Init mPSU Charger
 if cfg.Selected_Device_Charger == 10:
     try:
         if cfg.mPSU_interface == 0:
@@ -3234,7 +3234,7 @@ if cfg.Selected_Device_Charger == 10:
     except Exception as e:
         dev.mPSU.network_stop()  # Exception -> close the bus
         dev.mPSU = None
-        mylogs.error("\n\nEXCEPTION DEMO Device not found !\n")
+        mylogs.error("\n\nEXCEPTION mPSU Device not found !\n")
         mylogs.error(str(e))
         sys.exit(1)
 

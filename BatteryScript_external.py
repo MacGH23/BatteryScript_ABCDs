@@ -64,14 +64,17 @@ class BatteryScript_external:
         return status
 
     def ext_charger_set(self, val, force, dev, cfg, status):
-        logging.verbose("BatteryScript_external_charger_set - ")
+        logging.debug("BatteryScript_external_charger_set - ")
         if(self.devfound == 0):
-            logging.verbose("BatteryScript_external_charger_set - No device found")
+            logging.debug("BatteryScript_external_charger_set - No device found")
             return status
         return status
 
     def ext_discharger_set(self, val, force,  dev, cfg, status):
-        logging.info("BatteryScript_external_ex_discharger_set - ")
+        logging.debug("BatteryScript_external_ex_discharger_set - ")
+        if(self.devfound == 0):
+            logging.debug("BatteryScript_external_discharger_set - No device found")
+            return status
         return status
 
     def ext_close(self, dev, cfg, status):
@@ -83,5 +86,6 @@ class BatteryScript_external:
 
     def ext_open(self, dev, cfg, status):
         logging.info("BatteryScript_external_open - ")
+		#do somwthing here, if you add a new device for charge/discharge set devfound = 1
         self.devfound = 0
         return status
