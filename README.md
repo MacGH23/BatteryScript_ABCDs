@@ -156,6 +156,9 @@ To use the script as a service copy the file ABCDS.service to /etc/systemd/syste
 `systemctl start book-scraper`<br><br>
 
 **Additional Features**<br>
+BatteryScript_external.py: <br>
+Here you can code your own extensions for several IO/GPIO actions<br>
+<br>
 GPIO: <br>
 Upto 4 GPIO buttons are already prepared, but you have to implement the action yourself<br>
 <br>
