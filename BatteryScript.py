@@ -367,11 +367,26 @@ class WS(BaseHTTPRequestHandler):
         if self.path == "/mqtt":
             self.wfile.write(self._actionhtml("Action"))
         if "/MAXCHARGECURRENT_" in self.path:
-            newvalue = int(self.path[18:])
-            status.MaxChargeCurrent = round((cfg.MaxChargeCurrent / 100) * newvalue)
-            status.MaxChargeCurrentChange = 1
-            mylogs.info("DIRECTWebServerRequest: MaxChargeCurrent new value: "+ str(status.MaxChargeCurrent))
-            self.wfile.write(self._statushtml(self.path))
+            ispercent = self.path[-1:]
+            if(ispercent == '%'):
+                newvalue = int(self.path[18:-1])
+                if(newvalue >= 0) and (newvalue <= 100):
+                    status.MaxChargeCurrent = round((cfg.MaxChargeCurrent / 100) * newvalue)
+                    status.MaxChargeCurrentChange = 1
+                    mylogs.info("DIRECTWebServerRequest: MaxChargeCurrent new value: "+ str(status.MaxChargeCurrent))
+                    self.wfile.write(self._statushtml(self.path))
+                else:
+                    mylogs.info("DIRECTWebServerRequest: ONLY 0..100% is allowed")
+                    self.wfile.write(self._statushtml(self.path))
+            else:
+                status.MaxChargeCurrent = int(self.path[18:])
+                if(status.MaxChargeCurrent > cfg.MaxChargeCurrent):
+                    status.MaxChargeCurrent = cfg.MaxChargeCurrent
+                if(status.MaxChargeCurrent < cfg.MinChargeCurrent):
+                    status.MaxChargeCurrent = cfg.MinChargeCurrent
+                status.MaxChargeCurrentChange = 1
+                mylogs.info("DIRECTWebServerRequest: MaxChargeCurrent new value: "+ str(status.MaxChargeCurrent))
+                self.wfile.write(self._statushtml(self.path))
 
         if "/DIRECTRESTART" in self.path:
             n = self.path[-1]
