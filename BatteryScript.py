@@ -71,6 +71,7 @@
 # macGH 09.12.2024  Version 0.4.8: Fixed BIC2200 Battery empty start
 # macGH 30.12.2024  Version 0.4.9: Added mPSU RS485 interface
 # macGH 10.01.2025  Version 0.5.0: Added mqtt publish EstWh
+# macGH 18.04.2025  Version 0.5.1: Added Change MaxChargeCurrent in WebInterface
 
 import os
 import sys
@@ -132,37 +133,53 @@ class WS(BaseHTTPRequestHandler):
         self.end_headers()
         return
 
-    def _gettableentry(self, parameter, value):
+    def _gettableentry(self, parameter, value, page):
         Button = "n.a."
-        if (
-            (parameter == "ChargerEnabled")
-            or (parameter == "DisChargerEnabled")
-            or (parameter == "WebAutoRefresh")
-            or (parameter == "MW_NBPVoltageAdjust")
-            or (parameter == "ShowRuntime")
-        ):
-            Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Toggle ON/OFF</button></form>'
+        if(page != 'config'): 
+            if (
+                (parameter == "ChargerEnabled")
+                or (parameter == "DisChargerEnabled")
+                or (parameter == "WebAutoRefresh")
+                or (parameter == "MW_NBPVoltageAdjust")
+                or (parameter == "ShowRuntime")
+            ):
+                Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Toggle ON/OFF</button></form>'
 
-        if "MQTT_" in parameter:
-            Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Execute MQTT Action</button></form>'
+            if "MaxChargeCurrent" in parameter:
+                Button = f'<form action="/" method="post"> \
+                        <button name={parameter} type="submit" value={parameter}_25>25%</button> \
+                        <button name={parameter} type="submit" value={parameter}_50>50%</button> \
+                        <button name={parameter} type="submit" value={parameter}_75>75%</button> \
+                        <button name={parameter} type="submit" value={parameter}_100>100%</button><br> \
+                        <button name={parameter} type="submit" value={parameter}_10>10%</button> \
+                        <button name={parameter} type="submit" value={parameter}_20>20%</button> \
+                        <button name={parameter} type="submit" value={parameter}_30>30%</button> \
+                        <button name={parameter} type="submit" value={parameter}_40>40%</button> \
+                        <button name={parameter} type="submit" value={parameter}_60>60%</button> \
+                        <button name={parameter} type="submit" value={parameter}_70>70%</button> \
+                        <button name={parameter} type="submit" value={parameter}_80>80%</button> \
+                        <button name={parameter} type="submit" value={parameter}_90>90%</button></form>'
 
-        if "EXT_" in parameter:
-            Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Execute EXTERNAL Action</button></form>'
+            if "MQTT_" in parameter:
+                Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Execute MQTT Action</button></form>'
 
-        if parameter == "EstBatteryWh":
-            Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Reset to 0</button></form>'
+            if "EXT_" in parameter:
+                Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Execute EXTERNAL Action</button></form>'
 
-        if parameter == "ReInitLCD":
-            Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Reinit i2c LCD</button></form>'
+            if parameter == "EstBatteryWh":
+                Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Reset to 0</button></form>'
 
-        if (parameter == "Reboot") or (parameter == "Shutdown") or ("RestartMethod" in parameter):
-            Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Press 3 times</button></form>'
+            if parameter == "ReInitLCD":
+                Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Reinit i2c LCD</button></form>'
 
-            # f'<input type="text" name="EstBatteryWhValue" placeholder="{value}">' + \
-            #'<label for="Minwatt">Minwatt:</label>\n'+ \
-            #'<input type="text" id="Minwatt" name="Minwatt"><br><br>\n'+ \
-            #'<button type="submit">Submit</button>\n'+ \
-            #'<button type="submit" formmethod="post">Submit using POST</button>\n' + \
+            if (parameter == "Reboot") or (parameter == "Shutdown") or ("RestartMethod" in parameter):
+                Button = f'<form action="/" method="post"><button name={parameter} type="submit" value={parameter}>Press 3 times</button></form>'
+
+                # f'<input type="text" name="EstBatteryWhValue" placeholder="{value}">' + \
+                #'<label for="Minwatt">Minwatt:</label>\n'+ \
+                #'<input type="text" id="Minwatt" name="Minwatt"><br><br>\n'+ \
+                #'<button type="submit">Submit</button>\n'+ \
+                #'<button type="submit" formmethod="post">Submit using POST</button>\n' + \
 
         tabcontent = (
             "<tr>\n"
@@ -213,7 +230,7 @@ class WS(BaseHTTPRequestHandler):
     def _confightml(self, message):
         content = ""
         for attr, value in vars(cfg).items():
-            content = content + self._gettableentry(attr, value)
+            content = content + self._gettableentry(attr, value,'config')
 
         content = (
             self._beginhtml(message, -1, "/config")
@@ -231,7 +248,7 @@ class WS(BaseHTTPRequestHandler):
         content = ""
         for attr, value in vars(BMSstatus).items():
             # if((attr == "BMSCurrent") or (attr == "BMSVoltage")): attr = str(int(attr)/100)
-            content = content + self._gettableentry(attr, value)
+            content = content + self._gettableentry(attr, value,'bms')
 
         content = (
             self._beginhtml(message, 30, "/bms")
@@ -247,18 +264,18 @@ class WS(BaseHTTPRequestHandler):
 
     def _systemhtml(self, message):
         content = (
-            self._gettableentry("CPU usage in %", psutil.cpu_percent())
-            + self._gettableentry("RAM usage in %", psutil.virtual_memory().percent)
+            self._gettableentry("CPU usage in %", psutil.cpu_percent(),'system')
+            + self._gettableentry("RAM usage in %", psutil.virtual_memory().percent,'system')
             + self._gettableentry(
                 "CPU Temperature &deg;C",
-                int(psutil.sensors_temperatures()["cpu_thermal"][0].current),
+                int(psutil.sensors_temperatures()["cpu_thermal"][0].current),'system'
             )
-            + self._gettableentry("Reboot", status.WebRebootSDcounter)
-            + self._gettableentry("Shutdown", status.WebRebootSDcounter)
-            + self._gettableentry("RestartMethod0", status.WebRebootSDcounter)
-            + self._gettableentry("RestartMethod1", status.WebRebootSDcounter)
-            + self._gettableentry("RestartMethod2", status.WebRebootSDcounter)
-            + self._gettableentry("RestartMethod3", status.WebRebootSDcounter)
+            + self._gettableentry("Reboot", status.WebRebootSDcounter,'system')
+            + self._gettableentry("Shutdown", status.WebRebootSDcounter,'system')
+            + self._gettableentry("RestartMethod0", status.WebRebootSDcounter,'system')
+            + self._gettableentry("RestartMethod1", status.WebRebootSDcounter,'system')
+            + self._gettableentry("RestartMethod2", status.WebRebootSDcounter,'system')
+            + self._gettableentry("RestartMethod3", status.WebRebootSDcounter,'system')
         )
 
         content = (
@@ -275,14 +292,14 @@ class WS(BaseHTTPRequestHandler):
 
     def _actionhtml(self, message):
         content = (
-            self._gettableentry("MQTT_" + cfg.mqttaction1name + "_1", 0)
-            + self._gettableentry("MQTT_" + cfg.mqttaction2name + "_2", 0)
-            + self._gettableentry("MQTT_" + cfg.mqttaction3name + "_3", 0)
-            + self._gettableentry("MQTT_" + cfg.mqttaction4name + "_4", 0)
-            + self._gettableentry("EXT_1", 0)
-            + self._gettableentry("EXT_2", 0)
-            + self._gettableentry("EXT_3", 0)
-            + self._gettableentry("EXT_4", 0)
+            self._gettableentry("MQTT_" + cfg.mqttaction1name + "_1", 0,'action')
+            + self._gettableentry("MQTT_" + cfg.mqttaction2name + "_2", 0,'action')
+            + self._gettableentry("MQTT_" + cfg.mqttaction3name + "_3", 0,'action')
+            + self._gettableentry("MQTT_" + cfg.mqttaction4name + "_4", 0,'action')
+            + self._gettableentry("EXT_1", 0,'action')
+            + self._gettableentry("EXT_2", 0,'action')
+            + self._gettableentry("EXT_3", 0,'action')
+            + self._gettableentry("EXT_4", 0,'action')
         )
 
         content = (
@@ -302,24 +319,25 @@ class WS(BaseHTTPRequestHandler):
             self._beginhtml(str(message), 30, "/")
             + '<table style="border-collapse: collapse; width: 500px; height: 20px; border-style: solid;font-size:1.1vw;">\n'
             + "<tbody>\n"
-            + self._gettableentry("CurrentWattValue", status.CurrentWattValue)
-            + self._gettableentry("CurrentTotalWatt", status.CurrentTotalWatt)
-            + self._gettableentry("CurrentAverageWatt", status.CurrentAverageWatt)
-            + self._gettableentry("LastWattValueUsedinDevice", status.LastWattValueUsedinDevice)
-            + self._gettableentry("BatteryVoltage", status.BatteryVoltage / 100)
-            + self._gettableentry("BMSSOC", status.BMSSOC)
-            + self._gettableentry("EstBatteryWh", round(status.EstBatteryWh / 1000))
-            + self._gettableentry("BatteryFull", status.BatteryFULL)
-            + self._gettableentry("BatteryEmpty", status.BatteryEMPTY)
-            + self._gettableentry("ChargerEnabled", status.ChargerEnabled)
-            + self._gettableentry("ChargerStatus", status.ChargerStatus)
-            + self._gettableentry("DisChargerEnabled", status.DisChargerEnabled)
-            + self._gettableentry("DisChargerStatus", status.DisChargerStatus)
-            + self._gettableentry("MW_NPB_COUNTER", cfg.MW_NPB_COUNTER)
-            + self._gettableentry("MW_BIC_COUNTER", cfg.MW_BIC_COUNTER)
-            + self._gettableentry("LT_COUNTER", status.ltcounter)
-            + self._gettableentry("WebAutoRefresh", status.WebAutoRefresh)
-            + self._gettableentry("ReInitLCD", "")
+            + self._gettableentry("CurrentWattValue", status.CurrentWattValue,'status')
+            + self._gettableentry("CurrentTotalWatt", status.CurrentTotalWatt,'status')
+            + self._gettableentry("CurrentAverageWatt", status.CurrentAverageWatt,'status')
+            + self._gettableentry("LastWattValueUsedinDevice", status.LastWattValueUsedinDevice,'status')
+            + self._gettableentry("BatteryVoltage", status.BatteryVoltage / 100,'status')
+            + self._gettableentry("BMSSOC", status.BMSSOC,'status')
+            + self._gettableentry("EstBatteryWh", round(status.EstBatteryWh / 1000),'status')
+            + self._gettableentry("MaxChargeCurrent", status.MaxChargeCurrent,'status')
+            + self._gettableentry("BatteryFull", status.BatteryFULL,'status')
+            + self._gettableentry("BatteryEmpty", status.BatteryEMPTY,'status')
+            + self._gettableentry("ChargerEnabled", status.ChargerEnabled,'status')
+            + self._gettableentry("ChargerStatus", status.ChargerStatus,'status')
+            + self._gettableentry("DisChargerEnabled", status.DisChargerEnabled,'status')
+            + self._gettableentry("DisChargerStatus", status.DisChargerStatus,'status')
+            + self._gettableentry("MW_NPB_COUNTER", cfg.MW_NPB_COUNTER,'status')
+            + self._gettableentry("MW_BIC_COUNTER", cfg.MW_BIC_COUNTER,'status')
+            + self._gettableentry("LT_COUNTER", status.ltcounter,'status')
+            + self._gettableentry("WebAutoRefresh", status.WebAutoRefresh,'status')
+            + self._gettableentry("ReInitLCD", "",'status')
             + "</tbody>\n"
             + "</table>\n"
             + "</form>\n"
@@ -377,6 +395,14 @@ class WS(BaseHTTPRequestHandler):
             variable, value = item.split("=")
             bodyitems[variable] = value
             mylogs.info("WebServer: " + variable + " - " + value)
+
+            if variable == "MaxChargeCurrent":
+                todo = "MaxChargeCurrent changed"
+                newvalue = int(value[17:])
+                status.MaxChargeCurrent = round((cfg.MaxChargeCurrent / 100) * newvalue)
+                status.MaxChargeCurrentChange = 1
+                mylogs.info("WebServer: MaxChargeCurrent button pressed - New value: "+ str(status.MaxChargeCurrent))
+                self.wfile.write(self._statushtml(todo))
 
             if variable == "ChargerEnabled":
                 mylogs.info("WebServer: ChargerEnabled button pressed")
@@ -536,6 +562,8 @@ class Devicestatus:
         self.LastChargerGetCurrent = 0
         self.LastDisChargerGetCurrent = 0
         self.LastDisChargerSetCurrent = 0
+        self.MaxChargeCurrent = 0           #use for max chargecurrent to modify during operation
+        self.MaxChargeCurrentChange = 0     #Trigger to check new value
         self.BICChargeDisChargeMode = 0  # 0=Charge, 1 = DisCharge
         self.LastChargerMode = 0
         self.ChargerStatus = 0
@@ -654,6 +682,7 @@ class chargerconfig:
             self.BatteryTotalWH = round(self.CellCount * self.CellAH * 3.2 * 1000)
 
             self.MaxChargeCurrent = int(updater["Setup"]["MaxChargeCurrent"].value)
+            status.MaxChargeCurrent = self.MaxChargeCurrent
             self.MinChargeCurrent = int(updater["Setup"]["MinChargeCurrent"].value)
             self.MaxDisChargeCurrent = int(updater["Setup"]["MaxDisChargeCurrent"].value)
             self.MinDisChargeCurrent = int(updater["Setup"]["MinDisChargeCurrent"].value)
@@ -1511,10 +1540,11 @@ def StartStopOperationCharger(val, force=0):
         # Check if we need to set the new value to the Charger
         p = abs((status.LastWattValueUsedinDevice - status.ZeroImportWatt) - val)  # was +
 
-        if (val != 0) and (p <= cfg.LastChargePower_delta):
+        if (val != 0) and (p <= cfg.LastChargePower_delta) and (status.MaxChargeCurrentChange == 0):
             mylogs.info("No change of Charger output, Delta is: " + str(p) + "  - Set to :" + str(cfg.LastChargePower_delta))
             return
         else:
+            status.MaxChargeCurrentChange = 0
             if val != 0:
                 mylogs.info("Change of Charger output, Delta is: " + str(p) + "  - Set to :" + str(cfg.LastChargePower_delta))
 
@@ -1932,8 +1962,8 @@ def Charger_Device_Set(val, force=0):
         Current = (val * -10000) / vout
         IntCurrent = int(Current)
 
-        if IntCurrent >= cfg.MaxChargeCurrent:
-            IntCurrent = cfg.MaxChargeCurrent
+        if IntCurrent >= status.MaxChargeCurrent:
+            IntCurrent = status.MaxChargeCurrent
 
         # NPB device has a minimal charge current
         # Stop if this value is reached or allow take power from grid to charge
