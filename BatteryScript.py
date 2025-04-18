@@ -366,6 +366,13 @@ class WS(BaseHTTPRequestHandler):
             self.wfile.write(self._systemhtml("Read System status"))
         if self.path == "/mqtt":
             self.wfile.write(self._actionhtml("Action"))
+        if "/MAXCHARGECURRENT_" in self.path:
+            newvalue = int(self.path[18:])
+            status.MaxChargeCurrent = round((cfg.MaxChargeCurrent / 100) * newvalue)
+            status.MaxChargeCurrentChange = 1
+            mylogs.info("DIRECTWebServerRequest: MaxChargeCurrent new value: "+ str(status.MaxChargeCurrent))
+            self.wfile.write(self._statushtml(self.path))
+
         if "/DIRECTRESTART" in self.path:
             n = self.path[-1]
             p = os.path.dirname(__file__)
